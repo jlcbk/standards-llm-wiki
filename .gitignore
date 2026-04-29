@@ -1,0 +1,7 @@
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Large raw files are intentionally allowed in this design.
+# If this repo later stores large PDFs, consider Git LFS.
