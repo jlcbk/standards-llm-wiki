@@ -98,9 +98,15 @@ standards-wiki/
 │   ├── cited-standards-index.md
 │   └── topic-to-standards-index.md
 │
+├── _drafts/                     # 弱模型/慢模型生成的草稿，未审核
+├── _candidates/                 # 候选条款、候选主题、候选引用
+├── _reviews/                    # 多模型交叉检查结果、审核记录
+├── _jobs/                       # 异步任务描述和运行结果
+│
 └── _meta/
     ├── extraction-prompts.md
     ├── extraction-rules.md
+    ├── model-strategy.md
     ├── naming-conventions.md
     ├── quality-checklist.md
     └── unresolved-issues.md
@@ -193,6 +199,16 @@ standards/gb/gb-7258/changelog.md
 → comparisons/gb-7258-2017-vs-202x.md
 → clauses/gb-7258-*/
 ```
+
+## 模型策略
+
+本项目使用多层模型协作：
+
+- GPT 5.5 类即时强模型：负责架构、审核、跨标准判断、版本对比和最终问答；
+- MiniMax M2.5 / M2.7 类即时弱模型：负责快速元数据抽取、章节抽取、候选召回和索引初稿；
+- 慢速免费模型：作为异步后台 worker，负责夜间批量草稿、候选生成和多模型交叉检查。
+
+详细说明见：[`_meta/model-strategy.md`](_meta/model-strategy.md)。
 
 ## 第一阶段建议
 
