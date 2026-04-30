@@ -3,5 +3,27 @@
 .vscode/
 .idea/
 
+# Environment / secrets
+.env
+.env.*
+*.secret.*
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Derived indexes and caches
+# Markdown files in db/ can be committed if intentionally added as docs,
+# but generated databases/vector stores should stay reproducible artifacts.
+db/*.sqlite
+db/*.sqlite-*
+db/vector/
+.cache/
+
 # Large raw files are intentionally allowed in this design.
 # If this repo later stores large PDFs, consider Git LFS.
