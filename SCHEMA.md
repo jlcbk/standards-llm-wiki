@@ -348,6 +348,55 @@ citation:
   quote: "保留原文关键句"
 ```
 
+## Requirement / Obligation Schema
+
+Provision 页面可以包含结构化 requirement 块，用于表达义务、禁止、建议、许可、定义、例外和期限。详细规范见 [`_meta/requirement-obligation-schema.md`](_meta/requirement-obligation-schema.md)。
+
+```yaml
+requirement:
+  requirement_id: gb-7258-2017-11-6-r1
+  document_id: gb-7258-2017
+  provision_id: gb-7258-2017-11-6
+  modality: must | must_not | should | may | define | unknown
+  requirement_type: technical_requirement | procedural_requirement | documentation_requirement | reporting_requirement | testing_requirement | certification_requirement | prohibition | definition | scope_rule | exception_rule | transition_rule | unknown
+  subject: []
+  action: unknown
+  object: unknown
+  condition: unknown
+  exception: unknown
+  deadline: unknown
+  transition: unknown
+  evidence:
+    quote: "原文关键句"
+    source_text: sources/standards/gb/gb-7258-2017.md
+    original_source: raw/standards/gb/gb-7258-2017.pdf
+    locator:
+      page: unknown
+      label: "11.6"
+  confidence: medium
+  review_status: machine_extracted | reviewed | verified
+```
+
+机器抽取的 requirement 先进入 `_candidates/requirements/`，审核后再进入 formal provision 页面或导出索引。
+
+## Graph Export Schema
+
+图谱是派生层，不是 canonical source。节点和边从 Markdown frontmatter 与正文结构生成。详细规范见 [`_meta/graph-model.md`](_meta/graph-model.md)。
+
+核心边：
+
+```text
+Document -HAS_PROVISION→ Provision
+Provision -SUBSECTION_OF→ Provision
+Provision -NEXT→ Provision
+Provision -CITES→ Document/Provision
+Provision -ABOUT→ Topic
+Provision -APPLIES_TO→ Entity
+Provision -HAS_REQUIREMENT→ Requirement
+Requirement -HAS_EVIDENCE→ Citation
+Document -REPLACES/REPLACED_BY→ Document
+```
+
 ## Page Creation Rules
 
 - 每个入库文档至少创建一个 `documents/` 页面。

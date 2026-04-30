@@ -2,6 +2,32 @@
 
 面向 AI 问答的异构标准、法规、政策、规则知识库文件架构。整体思路参考 LLM Wiki：**不是简单把 PDF 丢进向量库**，而是把原始资料、转写文本、文档主档案、provision 事实页、跨文档主题、实体、时间线、版本对比和检索索引组织成可追溯、可维护的 Markdown 知识库。
 
+## Project Positioning
+
+本项目定位为：
+
+> **Regulatory Knowledge Compiler** — 标准法规知识编译器。
+
+它不是传统 RAG chatbot。传统弱 RAG 通常是：
+
+```text
+PDF → arbitrary chunks → embedding top_k → answer
+```
+
+本项目目标是：
+
+```text
+heterogeneous raw sources
+→ extracted source text
+→ reviewed Markdown knowledge layer
+→ deterministic indexes / graph / vector artifacts
+→ citation-grounded answers
+```
+
+近乎无限 token 的优势主要用于 **build-time 编译、审查、对比和评测生成**，而不是每次 query-time 重新把大量原文塞进上下文。
+
+详细原则见 [`_meta/architecture-principles.md`](_meta/architecture-principles.md)。
+
 ## 目标场景
 
 该知识库供 AI 查阅并回答人类问题，例如：
@@ -62,20 +88,7 @@ standards-llm-wiki/
 │   └── web/
 │
 ├── documents/                   # 所有正式文档主页面，推荐新内容使用
-│   ├── gb/
-│   ├── gb-t/
-│   ├── iso/
-│   ├── iec/
-│   ├── sae/
-│   ├── ece/
-│   ├── eu/
-│   ├── cn-policy/
-│   ├── certification/
-│   └── unknown/
-│
-├── standards/                   # 标准类文档兼容/专题视图，可保留 GB family 结构
 ├── provisions/                  # 通用条款/段落/章节/附件/表格页
-├── clauses/                     # 旧版 GB clause 兼容目录；新增异构内容优先 provisions/
 ├── topics/                      # 跨文档主题页
 ├── entities/                    # 机构、车辆类型、术语、技术对象、法规概念
 ├── comparisons/                 # 版本对比、跨体系对比
@@ -83,8 +96,9 @@ standards-llm-wiki/
 ├── questions/                   # 高频问答沉淀
 ├── indexes/                     # 给 AI 和程序快速检索用的索引
 │
+├── eval/                        # QA benchmark and golden answers
 ├── tools/                       # 后续放 CLI/ingestion/indexing 工具
-├── db/                          # 本地派生索引，默认不提交
+├── db/                          # 本地派生索引，默认不提交生成物
 │
 ├── _drafts/                     # 弱模型/慢模型生成的草稿，未审核
 ├── _candidates/                 # 候选条款、候选主题、候选引用、候选元数据
@@ -101,30 +115,9 @@ standards-llm-wiki/
 
 只存放原始资料，不修改。包括标准 PDF、法规公告、政策网页、官方解读、网页存档等。
 
-用途：
-
-- 事实追溯；
-- 重新抽取；
-- 人工核验；
-- 避免 LLM 摘要错误后无源可查。
-
 ### 2. 原文转写层：`sources/`
 
 存放从 PDF/OCR/网页抽取出来的 Markdown 或文本，尽量贴近原文，不做解释性改写。
-
-推荐 frontmatter：
-
-```yaml
----
-source_file: raw/standards/gb/gb-7258-2017.pdf
-source_url: unknown
-document_id: gb-7258-2017
-title: 机动车运行安全技术条件
-extracted_at: 2026-04-30
-extractor: pymupdf | pymupdf4llm | marker-pdf | docling | trafilatura | python-docx | manual
-quality: high | medium | low
----
-```
 
 ### 3. 文档主档案层：`documents/`
 
@@ -138,11 +131,12 @@ quality: high | medium | low
 - `comparisons/`：版本对比、跨体系对比；
 - `timelines/`：发布日期、实施日期、替代关系、过渡期。
 
-### 5. AI 检索层：`indexes/`、`questions/`、派生数据库
+### 5. AI 检索层：`indexes/`、`questions/`、`eval/`、派生数据库
 
 - `indexes/`：Markdown 结构化索引，适合 AI 直接读；
 - `questions/`：高价值复杂问答沉淀，避免重复推理；
-- `db/`：SQLite FTS5、LanceDB/Qdrant 等派生索引，不作为 canonical source。
+- `eval/`：FactQ / RelationQ / ComparisonQ / InferenceQ benchmark；
+- `db/`：SQLite FTS5、JSON、graph、vector 等派生索引，不作为 canonical source。
 
 ## 推荐外部工具
 
@@ -155,11 +149,23 @@ PDF 扫描/复杂版式：marker-pdf 或 docling
 DOCX：python-docx
 全文检索：SQLite FTS5
 向量检索：LanceDB 或 Qdrant
+图谱探索：JSONL graph / Neo4j CSV optional
 服务层：FastAPI
 任务层：先用 CLI，后续再加 RQ/Celery/Dramatiq
 ```
 
-详细流水线见 [`_meta/ingestion-pipeline.md`](_meta/ingestion-pipeline.md) 和 [`_meta/tooling.md`](_meta/tooling.md)。
+## Key Design Documents
+
+- [`_meta/architecture-principles.md`](_meta/architecture-principles.md) — compiler-first 架构原则。
+- [`_meta/ingestion-pipeline.md`](_meta/ingestion-pipeline.md) — 入库流水线。
+- [`_meta/tooling.md`](_meta/tooling.md) — 外部工具选型。
+- [`_meta/parser-strategy.md`](_meta/parser-strategy.md) — GB/ISO/ECE/政策 parser 策略。
+- [`_meta/requirement-obligation-schema.md`](_meta/requirement-obligation-schema.md) — requirement / obligation 抽取 schema。
+- [`_meta/graph-model.md`](_meta/graph-model.md) — 派生图谱模型。
+- [`_meta/evaluation-benchmark.md`](_meta/evaluation-benchmark.md) — 评测集设计。
+- [`_meta/source-inventory.md`](_meta/source-inventory.md) — 来源、授权、构建溯源。
+- [`_meta/export-formats.md`](_meta/export-formats.md) — SQLite/JSON/graph/RDF 导出方案。
+- [`_meta/roadmap.md`](_meta/roadmap.md) — 实施路线图。
 
 ## 三类典型问题的查询路径
 
@@ -202,7 +208,7 @@ Level 2: Provision split
   能拆章节/条款/段落/附件，并保留 locator。
 
 Level 3: Semantic enrichment
-  能提取主题、实体、引用关系、实施日期、替代关系、适用对象。
+  能提取主题、实体、引用关系、实施日期、替代关系、适用对象、requirement/obligation。
 ```
 
 奇怪格式文档至少应做到 Level 1，不要因无法精准拆条款而阻塞入库。
@@ -220,20 +226,20 @@ Level 3: Semantic enrichment
 优先建设：
 
 ```text
-SCHEMA.md
-_meta/ingestion-pipeline.md
-_meta/tooling.md
-documents/
-provisions/
-indexes/topic-to-documents-index.md
+kb ingest-file / ingest-url
+kb compile-document
+kb validate
+kb export sqlite/json
+kb search
 ```
 
 第二阶段再补：
 
 ```text
+Graph export / Neo4j CSV
+Vector index
 FastAPI QA service
-SQLite FTS5 indexer
-LanceDB/Qdrant vector indexer
+Benchmark eval runner
 批处理任务队列
 多模型审核工作流
 ```

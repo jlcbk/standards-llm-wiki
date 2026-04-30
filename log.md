@@ -3,6 +3,16 @@
 > Chronological record of wiki actions. Append-only.
 > Format: `## [YYYY-MM-DD] action | subject`
 
+## [2026-04-30] update | Add compiler-first architecture, graph, obligation, benchmark and provenance design
+
+- Added `_meta/architecture-principles.md` to position the project as a Regulatory Knowledge Compiler rather than naive RAG.
+- Added `_meta/graph-model.md` for derived document/provision/topic/entity graph exports.
+- Added `_meta/requirement-obligation-schema.md` for structured regulatory obligation extraction.
+- Added `_meta/evaluation-benchmark.md` plus `eval/` placeholders and rubric for FactQ/RelationQ/ComparisonQ/InferenceQ evaluation.
+- Added `_meta/source-inventory.md` and `_meta/export-formats.md` for provenance and reproducible SQLite/JSON/graph/RDF artifacts.
+- Added `_meta/roadmap.md` for phased implementation.
+- Updated README, SCHEMA and index to reflect the compiler-first route.
+
 ## [2026-04-30] update | Generalize to heterogeneous standards, regulations, policies and rules
 
 - Upgraded schema from GB-oriented `standard/clause` model to generic `document/provision/topic/entity` model.
