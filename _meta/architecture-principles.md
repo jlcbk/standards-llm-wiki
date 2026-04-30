@@ -37,9 +37,15 @@ Standards, regulations and policy documents are not ordinary articles:
 
 Therefore the expensive reasoning should happen mostly at **build time**, not at every user query.
 
-## Use Unlimited Token Budget at Build Time
+## Use Tiered Model Resources at Build Time
 
-The user's strategic advantage is abundant token budget. Use it for:
+The project should use different model tiers deliberately:
+
+1. reliable high-quality immediate model: final architecture, legal/regulatory interpretation, difficult comparisons, final review;
+2. reliable medium-quality immediate model: metadata drafts, outline extraction, candidate topic/entity tags, first-pass provision splitting;
+3. unstable high-capability models: background drafts, alternate reviews, contradiction checks, benchmark question generation, non-blocking cross-checks.
+
+Use these resources mainly for:
 
 1. complete-document reading;
 2. provision-level structuring;
@@ -49,7 +55,7 @@ The user's strategic advantage is abundant token budget. Use it for:
 6. citation/source traceability audits;
 7. benchmark question generation.
 
-Do **not** spend it only by stuffing more raw PDF text into every query-time prompt.
+Do **not** spend model capacity only by stuffing more raw PDF text into every query-time prompt.
 
 ## Canonical Source of Truth
 

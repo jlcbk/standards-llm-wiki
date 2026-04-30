@@ -24,7 +24,7 @@ heterogeneous raw sources
 → citation-grounded answers
 ```
 
-近乎无限 token 的优势主要用于 **build-time 编译、审查、对比和评测生成**，而不是每次 query-time 重新把大量原文塞进上下文。
+多层模型资源主要按能力与稳定性分工：推理能力强且稳定的即时模型用于关键判断与最终审核，稳定的中等能力即时模型用于结构化初抽，不稳定但高能力的后台模型用于异步草稿、交叉检查和评测生成；这些资源主要用于 **build-time 编译、审查、对比和评测生成**，而不是每次 query-time 重新把大量原文塞进上下文。
 
 详细原则见 [`_meta/architecture-principles.md`](_meta/architecture-principles.md)。
 

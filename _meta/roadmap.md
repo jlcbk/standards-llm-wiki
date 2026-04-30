@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-This roadmap assumes the project is a Regulatory Knowledge Compiler with abundant build-time token budget.
+This roadmap assumes the project is a Regulatory Knowledge Compiler with tiered build-time model resources.
 
 ## Phase 0 — Architecture Hardening
 
