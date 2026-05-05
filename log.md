@@ -3,6 +3,14 @@
 > Chronological record of wiki actions. Append-only.
 > Format: `## [YYYY-MM-DD] action | subject`
 
+## [2026-05-05] update | Phase 1 ingestion development scope
+
+- Added `_meta/phase-1-development-scope.md` describing required modules, outputs, dependencies, and acceptance criteria.
+- Extended `_meta/ingestion-pipeline.md` with phase-1 PDF/URL import scope, directory mapping, module responsibilities, and non-goals.
+- Added `docs/plans/2026-05-05-phase-1-ingestion.md` as the implementation plan.
+- Added placeholder directories for `src/standards_wiki/`, `tools/`, `tests/`, and candidate document/source outputs.
+- Updated README with the latest phase-1 development status.
+
 ## [2026-04-30] update | Add compiler-first architecture, graph, obligation, benchmark and provenance design
 
 - Added `_meta/architecture-principles.md` to position the project as a Regulatory Knowledge Compiler rather than naive RAG.

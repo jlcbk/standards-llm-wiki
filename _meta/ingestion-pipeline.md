@@ -268,3 +268,68 @@ kb ask "ECE R100 和 GB 38031 对电池安全有什么差异？"
 - [ ] frontmatter 包含 `document_id`、`document_type`、`source_path/source_url`、`confidence`、`review_status`；
 - [ ] 不确定字段为 `unknown`，而不是模型猜测；
 - [ ] 更新 `index.md` 和 `log.md`。
+
+## Phase 1 Implementation Scope
+
+第一阶段只实现最小导入入口，不直接发布正式知识页：
+
+```text
+PDF / URL
+→ job created
+→ archive raw source
+→ extract source text
+→ classify document type
+→ extract candidate metadata
+→ write candidate document
+→ write completed/failed job record
+```
+
+### Phase 1 Directory Mapping
+
+```text
+PDF input
+→ raw/standards/ or raw/regulations/
+→ sources/standards/ or sources/regulations/
+→ _candidates/metadata/
+→ _candidates/documents/
+→ _jobs/completed/ or _jobs/failed/
+
+URL input
+→ raw/web/
+→ sources/web/
+→ _candidates/metadata/
+→ _candidates/documents/
+→ _jobs/completed/ or _jobs/failed/
+```
+
+### Phase 1 Commands
+
+```bash
+python tools/ingest_pdf.py ./samples/example.pdf
+python tools/ingest_url.py "https://example.gov.cn/notice.html"
+```
+
+### Phase 1 Modules
+
+```text
+src/standards_wiki/ingest.py          # pipeline orchestration
+src/standards_wiki/archive.py         # raw archiving and SHA256
+src/standards_wiki/extractors/pdf.py  # text PDF extraction, OCR-needed detection
+src/standards_wiki/extractors/html.py # webpage fetch and Markdown conversion
+src/standards_wiki/classifier.py      # document type and family hints
+src/standards_wiki/metadata.py        # candidate metadata extraction
+src/standards_wiki/jobs.py            # job state records
+src/standards_wiki/writers/           # candidate and job writers
+```
+
+### Phase 1 Non-Goals
+
+- 扫描 PDF OCR；
+- 向量数据库；
+- 图数据库；
+- Web UI；
+- 自动问答；
+- 多模型投票；
+- 自动发布正式标准页；
+- 自动生成完整条款页和主题页。
+

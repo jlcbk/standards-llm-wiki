@@ -100,8 +100,12 @@ standards-llm-wiki/
 ├── tools/                       # 后续放 CLI/ingestion/indexing 工具
 ├── db/                          # 本地派生索引，默认不提交生成物
 │
-├── _drafts/                     # 弱模型/慢模型生成的草稿，未审核
-├── _candidates/                 # 候选条款、候选主题、候选引用、候选元数据
+├── src/standards_wiki/          # 第一阶段导入流水线程序包
+├── tests/                       # 自动化测试
+├── docs/plans/                  # 实施计划
+│
+├── _drafts/                     # 后台模型生成的草稿，未审核
+├── _candidates/                 # 候选元数据、候选文档、候选条款、候选主题、候选引用
 ├── _reviews/                    # 多模型交叉检查结果、审核记录
 ├── _jobs/                       # 异步任务描述和运行结果
 └── _meta/                       # 规则、prompt、质量清单、工具方案
@@ -213,7 +217,42 @@ Level 3: Semantic enrichment
 
 奇怪格式文档至少应做到 Level 1，不要因无法精准拆条款而阻塞入库。
 
-## 第一阶段建议
+## 第一阶段开发状态
+
+当前最新开发方向是先补“导入流水线”，让项目可以接收 PDF 和网页链接，并产生可追溯的候选资料。
+
+第一阶段目标：
+
+```text
+PDF / URL
+→ raw/ 原始归档
+→ sources/ 正文提取
+→ _candidates/ 元数据和候选文档
+→ _jobs/ 任务状态记录
+```
+
+计划模块：
+
+```text
+src/standards_wiki/ingest.py
+src/standards_wiki/archive.py
+src/standards_wiki/extractors/pdf.py
+src/standards_wiki/extractors/html.py
+src/standards_wiki/classifier.py
+src/standards_wiki/metadata.py
+src/standards_wiki/jobs.py
+src/standards_wiki/writers/
+tools/ingest_pdf.py
+tools/ingest_url.py
+```
+
+详细说明见：
+
+- [`_meta/ingestion-pipeline.md`](_meta/ingestion-pipeline.md)
+- [`_meta/phase-1-development-scope.md`](_meta/phase-1-development-scope.md)
+- [`docs/plans/2026-05-05-phase-1-ingestion.md`](docs/plans/2026-05-05-phase-1-ingestion.md)
+
+## 第一阶段样本建议
 
 先用 3–5 个异构样本跑通流程：
 

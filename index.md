@@ -1,7 +1,7 @@
 # Standards & Regulations Wiki Index
 
 > 面向 AI 问答的异构标准、法规、政策、规则知识库目录。
-> Last updated: 2026-04-30 | Total pages: 0
+> Last updated: 2026-05-05 | Total formal knowledge pages: 0 | Planning/meta pages: 3
 
 ## Core Design Documents
 
