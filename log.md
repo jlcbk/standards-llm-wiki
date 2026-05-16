@@ -3,6 +3,39 @@
 > Chronological record of wiki actions. Append-only.
 > Format: `## [YYYY-MM-DD] action | subject`
 
+## [2026-05-16] seal | Phase 1 ingestion pipeline ready for promotion work
+
+- Isolated CLI smoke tests so subprocess-based ingestion tests write only to pytest temporary directories.
+- Added ignore rules for Python build and coverage artifacts such as `*.egg-info/` and `.coverage*`.
+- Normalized README and CLI usage examples to `.venv/bin/python` so commands do not depend on a system-level `python` executable.
+- Re-ran the Phase 1 test suite before closing this phase.
+
+## [2026-05-16] improve | Borrow standard-pdf-md-lab PDF conversion findings
+
+- Added optional `marker-pdf` / `marker_single` extraction path for larger text-based standards, with automatic fallback to `pymupdf4llm`.
+- Added Marker asset copying and Markdown image-link rewriting under `sources/{type}/{slug}_assets/`.
+- Strengthened Markdown cleanup for GB/T bracket artifacts, CJK character spacing, repeated page headers, page numbers, and standard token normalization.
+- Improved metadata extraction for compact dates such as `20170929发布` and classification from detected standard IDs when the visible title is generic.
+- Added regression tests for the new PDF cleanup, Marker asset handling, and compact date metadata behavior.
+
+## [2026-05-13] implement | Phase 1 ingestion pipeline — all 12 tasks complete
+
+- Implemented full ingestion pipeline with 12 modules and 78 tests:
+  - `src/standards_wiki/utils.py` — slugify, utc_now_iso, ensure_parent helpers
+  - `src/standards_wiki/jobs.py` — job tracking (pending/running/completed/failed)
+  - `src/standards_wiki/archive.py` — raw PDF/HTML archival with SHA256 fingerprints
+  - `src/standards_wiki/classifier.py` — deterministic GB/GB/T/ISO/ECE classification
+  - `src/standards_wiki/extractors/pdf.py` — text PDF → Markdown extraction with OCR detection
+  - `src/standards_wiki/extractors/html.py` — URL fetch + HTML → Markdown conversion + attachment collection
+  - `src/standards_wiki/metadata.py` — candidate metadata extraction (title, dates, publisher, standard ID)
+  - `src/standards_wiki/writers/candidate_writer.py` — YAML metadata + Markdown document writers
+  - `src/standards_wiki/ingest.py` — full pipeline orchestration for PDF and URL
+  - `tools/ingest_pdf.py` — CLI for PDF ingestion
+  - `tools/ingest_url.py` — CLI for URL ingestion
+- Added comprehensive test suites: test_utils (12), test_jobs (14), test_archive (17), test_classifier (17), test_pdf_extractor (7), test_html_extractor (11), test_metadata (29), test_candidate_writer (8), test_ingest_smoke (4) = 119 tests total
+- Updated README.md with Phase 1 usage guide (install, CLI commands, output dirs, OCR limitation)
+- All tests pass; CLI verified with smoke tests
+
 ## [2026-05-05] update | Phase 1 ingestion development scope
 
 - Added `_meta/phase-1-development-scope.md` describing required modules, outputs, dependencies, and acceptance criteria.

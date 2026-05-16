@@ -16,6 +16,9 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
+*.egg-info/
+.coverage
+.coverage.*
 
 # Derived indexes and caches
 # Markdown files in db/ can be committed if intentionally added as docs,

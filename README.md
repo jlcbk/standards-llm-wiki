@@ -272,6 +272,62 @@ kb export sqlite/json
 kb search
 ```
 
+## 第一阶段使用指南
+
+### 安装依赖
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+### PDF 入库
+
+```bash
+.venv/bin/python tools/ingest_pdf.py ./raw/standards/example.pdf
+```
+
+输出：
+- `raw/standards/{slug}.pdf` — 原始 PDF 归档
+- `sources/standards/{slug}.md` — 提取的 Markdown 文本
+- `_candidates/metadata/{slug}.yaml` — 候选元数据
+- `_candidates/documents/{slug}.md` — 候选文档页面
+- `_jobs/completed/{job_id}.json` — 任务完成记录
+
+### PDF 转 Markdown 引擎
+
+默认 `auto` 策略会对页数较多的文本型标准 PDF 优先尝试 `marker-pdf` 的 `marker_single`，以获得更好的版面、表格和图片保留效果；如果 `marker` 不可用或转换失败，会自动回退到 `pymupdf4llm`。小 PDF、测试样例和疑似扫描件不会默认触发重型 `marker`，避免本地 CPU 长时间运行。
+
+可以用环境变量强制选择：
+
+```bash
+STANDARDS_WIKI_PDF_ENGINE=pymupdf4llm .venv/bin/python tools/ingest_pdf.py ./raw/standards/example.pdf
+STANDARDS_WIKI_PDF_ENGINE=marker .venv/bin/python tools/ingest_pdf.py ./raw/standards/example.pdf
+```
+
+`marker` 输出中的图片会复制到 `sources/standards/{slug}_assets/`，Markdown 图片链接会同步改写。
+
+### 网页入库
+
+```bash
+.venv/bin/python tools/ingest_url.py "https://example.gov.cn/notice.html"
+```
+
+输出目录同上，`sources/` 下放入 `web/` 子目录。
+
+### OCR 限制
+
+Phase 1 仅支持**文本型 PDF**（可直接提取文字）。如果 PDF 是扫描件或图片型，提取的文字量会很少，系统会自动标记 `ocr_required: true` 并在输出中发出警告。OCR 功能在 Phase 2 加入。
+
+### 验证
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+---
+
 第二阶段再补：
 
 ```text
