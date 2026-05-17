@@ -1,6 +1,7 @@
 """Deterministic candidate evaluation — run checks against extracted data."""
 
 import json
+import sqlite3
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -14,6 +15,11 @@ _TYPE_CATEGORY_MAP = {
     "evidence_quote_exists": "citation_missing",
     "metadata_field_equals": "metadata_mismatch",
     "topic_tag_exists": "topic_mismatch",
+    "sqlite_table_row_count": "export_sqlite",
+    "sqlite_fts_result": "export_sqlite",
+    "graph_node_exists": "export_graph",
+    "graph_edge_exists": "export_graph",
+    "graph_edge_integrity": "export_graph",
 }
 
 _VALID_SEVERITIES = {"info", "warn", "error"}
@@ -102,7 +108,8 @@ def run_checks(checks: list[dict], context: dict) -> dict:
             continue
 
         passed, reason = _run_single(
-            check_type, expected, documents, provisions, requirements, topic_tags,
+            check_type, expected, context,
+            documents, provisions, requirements, topic_tags,
         )
         if not passed:
             # Infer category/severity for backward compat
@@ -131,7 +138,7 @@ def _infer_category(check_type: str) -> str:
     return _TYPE_CATEGORY_MAP.get(check_type, "missed_document")
 
 
-def _run_single(check_type, expected, documents, provisions, requirements, topic_tags):
+def _run_single(check_type, expected, context, documents, provisions, requirements, topic_tags):
     """Execute a single check. Returns (passed, reason)."""
     if check_type == "document_id_exists":
         return _check_document_id(expected, documents, provisions, requirements)
@@ -147,6 +154,16 @@ def _run_single(check_type, expected, documents, provisions, requirements, topic
         return _check_metadata_field(expected, documents)
     if check_type == "topic_tag_exists":
         return _check_topic_tag(expected, topic_tags)
+    if check_type == "sqlite_table_row_count":
+        return _check_sqlite_table_row_count(expected, context)
+    if check_type == "sqlite_fts_result":
+        return _check_sqlite_fts_result(expected, context)
+    if check_type == "graph_node_exists":
+        return _check_graph_node_exists(expected, context)
+    if check_type == "graph_edge_exists":
+        return _check_graph_edge_exists(expected, context)
+    if check_type == "graph_edge_integrity":
+        return _check_graph_edge_integrity(expected, context)
     return False, f"Unknown check type: {check_type}"
 
 
@@ -372,3 +389,182 @@ def _check_topic_tag(expected, topic_tags):
             return True, ""
 
     return False, f"Topic '{topic}' not found in topic-tags for '{doc_id}'"
+
+
+# ---------------------------------------------------------------------------
+# Export-level checks (SQLite + Graph)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_db_path(expected: dict, context: dict) -> str | None:
+    """Resolve SQLite db path from expected or context."""
+    return expected.get("db_path") or context.get("sqlite_db_path")
+
+
+def _resolve_graph_dir(expected: dict, context: dict) -> str | None:
+    """Resolve graph output directory from expected or context."""
+    return expected.get("graph_dir") or context.get("graph_dir")
+
+
+def _load_jsonl_lines(path: Path) -> list[dict]:
+    """Load all records from a JSONL file."""
+    records = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                records.append(json.loads(line))
+    return records
+
+
+def _check_sqlite_table_row_count(expected, context):
+    """Check SQLite table row count >= min_count."""
+    db_path = _resolve_db_path(expected, context)
+    if not db_path:
+        return False, "Missing db_path in expected or sqlite_db_path in context"
+
+    table = expected.get("table", "")
+    if not table:
+        return False, "Missing table in expected"
+    min_count = expected.get("min_count", 0)
+
+    p = Path(db_path)
+    if not p.exists():
+        return False, f"Database not found: {db_path}"
+
+    try:
+        conn = sqlite3.connect(str(p))
+        try:
+            count = conn.execute(f"SELECT COUNT(*) FROM [{table}]").fetchone()[0]
+        finally:
+            conn.close()
+    except Exception as exc:
+        return False, f"SQLite error: {exc}"
+
+    if count >= min_count:
+        return True, ""
+    return False, f"Table '{table}' has {count} rows, need >= {min_count}"
+
+
+def _check_sqlite_fts_result(expected, context):
+    """Check FTS5 search result count >= min_count."""
+    db_path = _resolve_db_path(expected, context)
+    if not db_path:
+        return False, "Missing db_path in expected or sqlite_db_path in context"
+
+    query = expected.get("query", "")
+    if not query:
+        return False, "Missing query in expected"
+    mode = expected.get("mode", "provisions")
+    min_count = expected.get("min_count", 0)
+
+    try:
+        from .sqlite_search import search_sqlite
+        results = search_sqlite(
+            db_path, query, mode=mode,
+            document_id=expected.get("document_id"),
+        )
+    except Exception as exc:
+        return False, f"FTS search error: {exc}"
+
+    if len(results) >= min_count:
+        return True, ""
+    return False, (
+        f"FTS query '{query}' (mode={mode}) returned {len(results)} results, "
+        f"need >= {min_count}"
+    )
+
+
+def _check_graph_node_exists(expected, context):
+    """Check that a graph node exists with optional type filter."""
+    graph_dir = _resolve_graph_dir(expected, context)
+    if not graph_dir:
+        return False, "Missing graph_dir in expected or graph_dir in context"
+
+    nodes_path = expected.get("nodes_path") or str(Path(graph_dir) / "nodes.jsonl")
+    node_id = expected.get("id", "")
+    if not node_id:
+        return False, "Missing id in expected"
+    expected_type = expected.get("type")
+
+    p = Path(nodes_path)
+    if not p.exists():
+        return False, f"Nodes file not found: {nodes_path}"
+
+    for node in _load_jsonl_lines(p):
+        if node.get("id") == node_id:
+            if expected_type and node.get("type") != expected_type:
+                return False, (
+                    f"Node '{node_id}' has type '{node.get('type')}', "
+                    f"expected '{expected_type}'"
+                )
+            return True, ""
+
+    return False, f"Node '{node_id}' not found in graph"
+
+
+def _check_graph_edge_exists(expected, context):
+    """Check that a graph edge exists with source/target/type."""
+    graph_dir = _resolve_graph_dir(expected, context)
+    if not graph_dir:
+        return False, "Missing graph_dir in expected or graph_dir in context"
+
+    edges_path = expected.get("edges_path") or str(Path(graph_dir) / "edges.jsonl")
+    source = expected.get("source", "")
+    target = expected.get("target", "")
+    edge_type = expected.get("type", "")
+
+    if not source or not target:
+        return False, "Missing source/target in expected"
+    if not edge_type:
+        return False, "Missing type in expected"
+
+    p = Path(edges_path)
+    if not p.exists():
+        return False, f"Edges file not found: {edges_path}"
+
+    for edge in _load_jsonl_lines(p):
+        if (edge.get("source") == source
+                and edge.get("target") == target
+                and edge.get("type") == edge_type):
+            return True, ""
+
+    return False, (
+        f"Edge source='{source}' target='{target}' type='{edge_type}' not found"
+    )
+
+
+def _check_graph_edge_integrity(expected, context):
+    """Check all edge endpoints exist as nodes."""
+    graph_dir = _resolve_graph_dir(expected, context)
+    if not graph_dir:
+        return False, "Missing graph_dir in expected or graph_dir in context"
+
+    nodes_path = Path(expected.get("nodes_path") or str(Path(graph_dir) / "nodes.jsonl"))
+    edges_path = Path(expected.get("edges_path") or str(Path(graph_dir) / "edges.jsonl"))
+
+    if not nodes_path.exists():
+        return False, f"Nodes file not found: {nodes_path}"
+    if not edges_path.exists():
+        return False, f"Edges file not found: {edges_path}"
+
+    node_ids = set()
+    for node in _load_jsonl_lines(nodes_path):
+        nid = node.get("id")
+        if nid:
+            node_ids.add(nid)
+
+    missing = []
+    for edge in _load_jsonl_lines(edges_path):
+        src = edge.get("source", "")
+        tgt = edge.get("target", "")
+        if src and src not in node_ids:
+            missing.append(f"source '{src}'")
+        if tgt and tgt not in node_ids:
+            missing.append(f"target '{tgt}'")
+        if len(missing) >= 5:
+            break
+
+    if not missing:
+        return True, ""
+    return False, f"Edge endpoints missing from nodes: {', '.join(missing)}"

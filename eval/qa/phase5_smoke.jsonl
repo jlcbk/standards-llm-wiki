@@ -1,0 +1,15 @@
+{"id": "p5-01", "type": "sqlite_table_row_count", "expected": {"table": "documents", "min_count": 1}}
+{"id": "p5-02", "type": "sqlite_table_row_count", "expected": {"table": "provisions", "min_count": 100}}
+{"id": "p5-03", "type": "sqlite_table_row_count", "expected": {"table": "requirements", "min_count": 50}}
+{"id": "p5-04", "type": "sqlite_fts_result", "expected": {"query": "制动", "mode": "provisions", "min_count": 5}}
+{"id": "p5-05", "type": "sqlite_fts_result", "expected": {"query": "座椅", "mode": "provisions", "min_count": 1}}
+{"id": "p5-06", "type": "sqlite_fts_result", "expected": {"query": "校车", "mode": "all", "min_count": 1}}
+{"id": "p5-07", "type": "sqlite_fts_result", "expected": {"query": "制动", "mode": "requirements", "document_id": "gb-7258-2017", "min_count": 1}}
+{"id": "p5-08", "type": "graph_node_exists", "expected": {"id": "gb-7258-2017", "type": "Document"}}
+{"id": "p5-09", "type": "graph_node_exists", "expected": {"id": "gb-7258-2017-3-1", "type": "Provision"}}
+{"id": "p5-10", "type": "graph_node_exists", "expected": {"id": "gb-7258-2017-1-r1", "type": "Requirement"}}
+{"id": "p5-11", "type": "graph_edge_exists", "expected": {"source": "gb-7258-2017", "target": "gb-7258-2017-3-1", "type": "HAS_PROVISION"}}
+{"id": "p5-12", "type": "graph_edge_exists", "expected": {"source": "gb-7258-2017-1", "type": "HAS_REQUIREMENT", "target": "gb-7258-2017-1-r1"}}
+{"id": "p5-13", "type": "graph_edge_integrity", "expected": {}}
+{"id": "p5-14", "type": "sqlite_table_row_count", "expected": {"table": "documents_fts", "min_count": 1}}
+{"id": "p5-15", "type": "graph_node_exists", "expected": {"id": "gb-7258-2017", "type": "Document"}}

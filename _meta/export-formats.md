@@ -139,12 +139,13 @@ Do not start with RDF if it slows MVP. SQLite + JSON + Markdown are enough for f
 Target commands:
 
 ```bash
-kb export sqlite --out db/kb.sqlite
-kb export json --out db/json
-kb export graph-jsonl --out db/graph
-kb export neo4j-csv --out db/neo4j
-kb export rdf --out db/rdf/kb.ttl
+.venv/bin/python tools/export_sqlite.py --candidates-dir _candidates --out db/kb.sqlite
+.venv/bin/python tools/export_json.py --candidates-dir _candidates --output-dir db/json
+.venv/bin/python tools/export_graph.py --candidates-dir _candidates --out db/graph
 ```
+
+Future export targets may add Neo4j CSV or RDF/TTL, but Phase 5 keeps the
+implemented layer to SQLite FTS5 and Graph JSONL.
 
 ## Validation Before Export
 

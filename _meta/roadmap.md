@@ -162,30 +162,69 @@ Remaining (post-MVP):
 - cross-document samples (RelationQ/ComparisonQ/InferenceQ);
 - wrong version and missing exception failure visibility.
 
-## Phase 5 — Optional Graph and Vector Layers
+## Phase 5 — Export Layer MVP (SQLite FTS5 + Graph JSONL)
 
-Goal: improve cross-document reasoning and semantic recall.
+Status: completed.
+
+Goal: add a local, deterministic export layer — SQLite FTS5 for full-text search and Graph JSONL for node/edge interchange — without external services or vector DB.
+
+Scope (MVP):
+
+- SQLite FTS5 database with relational tables and full-text search;
+- Graph JSONL export (nodes + edges) following `_meta/graph-model.md`;
+- export-level deterministic smoke checks;
+- all derived artifacts live in `db/` and are never committed.
+
+Out of scope (post-MVP):
+
+- Neo4j CSV export;
+- LanceDB/Qdrant vector index;
+- graph-backed query planner;
+- semantic search or embeddings.
+
+Plan: `docs/plans/2026-05-18-phase-5-export-layer.md`
 
 Commands:
 
 ```bash
-kb export graph-jsonl
-kb export neo4j-csv
-kb index-vector
+.venv/bin/python tools/export_sqlite.py [--out db/kb.sqlite]
+.venv/bin/python tools/search_sqlite.py "制动系统" --mode provisions --limit 5
+.venv/bin/python tools/export_graph.py [--out db/graph]
+.venv/bin/python tools/eval_exports.py eval/qa/phase5_smoke.jsonl --candidates-dir _candidates
 ```
 
-Deliverables:
+Task cards:
 
-- JSONL graph export;
-- optional Neo4j CSV;
-- optional LanceDB/Qdrant index;
-- graph-backed query planner.
+| Task | Description | Status |
+|------|-------------|--------|
+| P5-01 | SQLite schema and exporter | completed |
+| P5-02 | SQLite FTS5 search CLI | completed |
+| P5-03 | Graph JSONL export | completed |
+| P5-04 | Export-level benchmark / smoke checks | completed |
+| P5-05 | Docs / roadmap closeout | completed |
 
-Exit criteria:
+Design decisions:
 
-- document tree, citation and topic edges are navigable;
-- vector results are filtered by metadata and review status;
-- final answers still cite Markdown/source pages.
+- `db/` is derived, never committed — reproducible from clean checkout.
+- Canonical source remains `_candidates/` Markdown/JSONL and `documents/`.
+- No external packages for MVP — stdlib `sqlite3` + `json` only.
+- Export reads from `_candidates/`, not from generated artifacts.
+- Backward compatible: Phase 3/4 tools and eval benchmarks unchanged.
+
+Exit criteria (MVP):
+
+- SQLite export produces valid, queryable database;
+- FTS5 search returns correct results for known provision labels and keywords;
+- Graph JSONL has no dangling edges and matches candidate counts;
+- All Phase 5 smoke checks pass;
+- No external services or non-stdlib dependencies introduced.
+
+Completion notes:
+
+- SQLite export currently builds `documents`, `provisions`, `requirements`, and FTS5 tables from `_candidates/`.
+- Search CLI supports `documents`, `provisions`, `requirements`, and `all` modes with `document_id`, `limit`, and `review_status` filters.
+- Graph JSONL export writes deterministic `nodes.jsonl` / `edges.jsonl` with no dangling edges.
+- Export smoke checks are defined in `eval/qa/phase5_smoke.jsonl` and run through `tools/eval_exports.py`.
 
 ## Phase 6 — Answer Engine and API
 
