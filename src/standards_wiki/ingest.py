@@ -59,6 +59,7 @@ def ingest_pdf(
             source_path=archive_result["raw_path"],
             sha256=archive_result["sha256"],
         )
+        metadata["document_id"] = slug
         metadata["source_text"] = extract_result["source_text"]
         metadata["ocr_required"] = extract_result["ocr_required"]
 
@@ -140,6 +141,7 @@ def ingest_url(
             source_url=url,
             document_type="policy_notice",  # Web content defaults to policy_notice
         )
+        metadata["document_id"] = slug
 
         # Step 4: Write candidate metadata
         metadata_path = write_candidate_metadata(metadata, slug)
