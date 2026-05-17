@@ -150,6 +150,41 @@ class TestSplitProvisions:
 
         assert provisions[0]["locator"]["label"] == "4.1"
 
+    def test_locator_occurrence_unique_labels(self):
+        text = (
+            "1 范围\n\n内容A\n\n"
+            "4.1 要求\n\n内容B\n\n"
+            "4.2 其他\n\n内容C\n"
+        )
+        provisions = split_provisions(text, "test")
+
+        assert provisions[0]["locator"]["occurrence"] == 1
+        assert provisions[1]["locator"]["occurrence"] == 1
+        assert provisions[2]["locator"]["occurrence"] == 1
+
+    def test_locator_occurrence_duplicate_labels(self):
+        text = "4.1 要求\n\n内容A\n\n4.1 要求\n\n内容B\n\n4.1 要求\n\n内容C\n"
+        provisions = split_provisions(text, "test")
+
+        assert provisions[0]["locator"]["occurrence"] == 1
+        assert provisions[1]["locator"]["occurrence"] == 2
+        assert provisions[2]["locator"]["occurrence"] == 3
+
+    def test_locator_source_offset(self):
+        text = (
+            "1 范围\n\n内容A\n\n"
+            "4.1 要求\n\n内容B\n"
+        )
+        provisions = split_provisions(text, "test")
+
+        assert provisions[0]["locator"]["source_offset"] == 0
+        assert provisions[1]["locator"]["source_offset"] == text.index("4.1")
+
+    def test_locator_occurrence_in_fallback(self):
+        provisions = split_provisions("no labels here", "test")
+        assert provisions[0]["locator"]["occurrence"] == 1
+        assert provisions[0]["locator"]["source_offset"] == 0
+
     def test_duplicate_labels_get_unique_ids(self):
         text = "4.1 要求\n\n内容A\n\n4.1 要求\n\n内容B\n\n4.1 要求\n\n内容C\n"
         provisions = split_provisions(text, "test")

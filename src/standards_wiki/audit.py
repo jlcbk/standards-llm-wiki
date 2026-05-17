@@ -85,12 +85,21 @@ def audit_candidates(
     report["checks"]["fallback_only_split"] = has_fallback and not has_real
 
     # 3. Duplicate provision labels
-    label_counts: dict[str, int] = {}
+    label_records: dict[str, list[dict]] = {}
     for p in provisions:
         label = p.get("label", "")
         if label and label != "fallback":
-            label_counts[label] = label_counts.get(label, 0) + 1
-    duplicates = {lbl: cnt for lbl, cnt in label_counts.items() if cnt > 1}
+            label_records.setdefault(label, []).append({
+                "provision_id": p.get("provision_id", "unknown"),
+                "locator": p.get("locator", ""),
+            })
+    duplicates = {}
+    for lbl, records in label_records.items():
+        if len(records) > 1:
+            duplicates[lbl] = {
+                "count": len(records),
+                "examples": records[:5],
+            }
     report["checks"]["duplicate_labels"] = duplicates
 
     # 4. Table-of-contents-looking labels / text
@@ -179,8 +188,13 @@ def format_summary(report: dict) -> str:
     dups = checks.get("duplicate_labels", {})
     if dups:
         lines.append(f"  [ISSUE] {len(dups)} duplicate labels")
-        for lbl, cnt in list(dups.items())[:5]:
+        for lbl, info in list(dups.items())[:5]:
+            cnt = info["count"]
             lines.append(f"    - {lbl}: {cnt} occurrences")
+            for ex in info.get("examples", [])[:5]:
+                loc = ex.get("locator", "")
+                suffix = f" [{loc}]" if loc else ""
+                lines.append(f"      {ex['provision_id']}{suffix}")
 
     toc = checks.get("toc_noise", [])
     if toc:

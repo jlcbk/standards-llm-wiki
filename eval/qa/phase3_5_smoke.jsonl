@@ -1,0 +1,3 @@
+{"id": "smoke-1", "type": "document_id_exists", "expected": "gb-7258-2017"}
+{"id": "smoke-2", "type": "provision_label_exists", "expected": {"document_id": "gb-7258-2017", "label": "4"}}
+{"id": "smoke-3", "type": "keyword_search", "expected": {"keyword": "制动", "min_count": 1}}

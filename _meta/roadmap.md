@@ -109,6 +109,26 @@ Exit criteria:
 - exact document IDs and provision labels are retrievable;
 - index can be rebuilt from clean checkout.
 
+## Phase 3.5 — Candidate Quality, Review, Tagging, and Eval MVP
+
+Status: completed (MVP bridge between Phase 3 and Phase 4).
+
+Goal: close the quality gap between machine-extracted candidates and formally promoted provisions.
+
+Deliverables:
+
+- provision splitter quality metadata (occurrence, source_offset, deterministic duplicate suffixes);
+- review manifest workflow (`manifest` → `mark reviewed` → `promote reviewed`);
+- rule-based topic/entity tagging with built-in keyword dictionary;
+- deterministic eval MVP runner with JSONL checks and failure reporting;
+- all functionality is local and deterministic — no external API calls.
+
+Design decisions:
+
+- eval MVP landed here as a lightweight smoke-test layer rather than waiting for Phase 4;
+- Phase 4 retains the broader benchmark scope (rubric, failure categories, cross-document samples);
+- real sample artifacts (e.g. `gb-7258-2017` candidates) are never auto-promoted or committed.
+
 ## Phase 4 — Evaluation Benchmark
 
 Goal: turn quality failures into a feedback loop.

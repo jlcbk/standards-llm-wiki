@@ -90,6 +90,7 @@ def split_provisions(
         return [_make_fallback_provision(document_id, text, source_text, raw_path)]
 
     provisions = []
+    label_occurrence: dict[str, int] = {}
     for i, (label_type, label, start, content_start) in enumerate(labels):
         # Content ends at next label or end of text
         if i + 1 < len(labels):
@@ -104,6 +105,7 @@ def split_provisions(
 
         provision_id = _make_provision_id(document_id, label)
         kind = _classify_kind(label)
+        label_occurrence[label] = label_occurrence.get(label, 0) + 1
 
         provisions.append({
             "document_id": document_id,
@@ -112,7 +114,11 @@ def split_provisions(
             "kind": kind,
             "title": title,
             "text": content,
-            "locator": {"label": label},
+            "locator": {
+                "label": label,
+                "occurrence": label_occurrence[label],
+                "source_offset": start,
+            },
             "source_text": source_text,
             "raw_path": raw_path,
             "confidence": confidence,
@@ -144,7 +150,7 @@ def _make_fallback_provision(
         "kind": "unknown",
         "title": "unknown",
         "text": text.strip(),
-        "locator": {"label": "fallback"},
+        "locator": {"label": "fallback", "occurrence": 1, "source_offset": 0},
         "source_text": source_text,
         "raw_path": raw_path,
         "confidence": "low",

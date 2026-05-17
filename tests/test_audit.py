@@ -143,7 +143,28 @@ class TestAuditCandidates:
 
         dups = report["checks"]["duplicate_labels"]
         assert "4.1" in dups
-        assert dups["4.1"] == 2
+        assert dups["4.1"]["count"] == 2
+        assert len(dups["4.1"]["examples"]) == 2
+        assert dups["4.1"]["examples"][0]["provision_id"] == "test-doc-4-1-a"
+
+    def test_duplicate_labels_caps_at_five_examples(self, tmp_path):
+        provisions = [
+            _make_provision(f"test-doc-4-1-{i}", label="4.1", text=f"text {i}")
+            for i in range(8)
+        ]
+        cdir = _write_provisions_and_requirements(
+            tmp_path, "test-doc", provisions=provisions,
+        )
+
+        report = audit_candidates(
+            "test-doc",
+            candidates_dir=cdir,
+            review_dir=tmp_path / "reviews",
+        )
+
+        dups = report["checks"]["duplicate_labels"]
+        assert dups["4.1"]["count"] == 8
+        assert len(dups["4.1"]["examples"]) == 5
 
     def test_detects_toc_label_noise(self, tmp_path):
         provisions = [
@@ -325,7 +346,15 @@ class TestFormatSummary:
                     {"provision_id": "p1", "label": "4.1", "text_length": 3},
                 ],
                 "fallback_only_split": True,
-                "duplicate_labels": {"4.1": 2},
+                "duplicate_labels": {
+                    "4.1": {
+                        "count": 2,
+                        "examples": [
+                            {"provision_id": "p1", "locator": "第4.1条"},
+                            {"provision_id": "p2", "locator": "第4.1条"},
+                        ],
+                    },
+                },
                 "toc_noise": [],
                 "requirement_density": 3.0,
                 "high_density_flag": True,
