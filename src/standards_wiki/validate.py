@@ -181,6 +181,8 @@ def validate_candidate_chain(
 
     try:
         metadata = load_metadata(meta_path)
+        if not metadata.get("document_id"):
+            metadata = {**metadata, "document_id": document_id}
         errors.extend(validate_metadata(metadata, str(meta_path)))
     except Exception as e:
         errors.append(ValidationError(

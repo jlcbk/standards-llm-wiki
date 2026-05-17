@@ -374,11 +374,48 @@ Phase 2 将 Phase 1 的候选文档继续编译成可审核的 document、provis
 .venv/bin/python -m pytest -q
 ```
 
+## 第三阶段使用指南
+
+Phase 3 MVP 从候选数据构建确定性索引，支持 Markdown 索引重建、JSON 导出和本地搜索。不依赖向量数据库或外部服务。
+
+### 构建 Markdown 索引
+
+```bash
+.venv/bin/python tools/build_indexes.py
+```
+
+输出：
+- `indexes/documents-index.md` — 文档索引
+- `indexes/provisions-index.md` — 条款索引
+- `indexes/requirements-index.md` — 要求索引
+- `indexes/effective-dates-index.md` — 实施日期索引
+
+### 导出 JSON 文件
+
+```bash
+.venv/bin/python tools/export_json.py
+```
+
+输出：
+- `db/json/documents.json`
+- `db/json/provisions.json`
+- `db/json/requirements.json`
+- `db/json/manifest.json` — 含记录计数和诊断信息
+
+### 本地搜索
+
+```bash
+.venv/bin/python tools/search.py "机动车" --limit 10
+```
+
+支持搜索文档标题/ID/标准号、条款标签/正文、要求原文引用。纯本地子串匹配，无需外部服务。
+
 ---
 
 后续阶段再补：
 
 ```text
+SQLite FTS5
 Graph export / Neo4j CSV
 Vector index
 FastAPI QA service

@@ -79,27 +79,34 @@ Exit criteria:
 
 ## Phase 3 — Deterministic Indexing
 
+Status: MVP complete.
+
 Goal: make the wiki searchable without relying on vector search.
 
 Commands:
 
 ```bash
-kb export sqlite --out db/kb.sqlite
-kb export json --out db/json
-kb search "电池安全 ECE"
+.venv/bin/python tools/build_indexes.py
+.venv/bin/python tools/export_json.py
+.venv/bin/python tools/search.py "电池安全 ECE" --limit 10
 ```
 
-Deliverables:
+Deliverables (MVP):
+
+- Markdown index generation (documents, provisions, requirements, effective dates);
+- JSON export (documents.json, provisions.json, requirements.json, manifest.json);
+- deterministic local search over documents, provisions, requirements;
+- duplicate ID detection in collect step;
+- tolerates missing optional files.
+
+Remaining (post-MVP):
 
 - SQLite FTS5 export;
-- JSON index export;
-- topic/document/provision lookup;
-- duplicate ID detection.
+- topic and entity filter layers.
 
 Exit criteria:
 
 - exact document IDs and provision labels are retrievable;
-- topic and entity filters work;
 - index can be rebuilt from clean checkout.
 
 ## Phase 4 — Evaluation Benchmark

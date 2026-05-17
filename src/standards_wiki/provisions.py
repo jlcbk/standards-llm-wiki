@@ -50,16 +50,16 @@ def _classify_kind(label: str) -> str:
     return "clause"
 
 
-def _detect_labels(text: str) -> list[tuple[str, str, int]]:
+def _detect_labels(text: str) -> list[tuple[str, str, int, int]]:
     """Detect all provision labels in text.
 
     Returns:
-        List of (label_type, label_text, start_position).
+        List of (label_type, label_text, start_position, content_start_position).
     """
     results = []
     for label_type, pattern in _PROVISION_LABEL_RES:
         for m in pattern.finditer(text):
-            results.append((label_type, m.group("label"), m.start()))
+            results.append((label_type, m.group("label"), m.start(), m.end()))
 
     results.sort(key=lambda x: x[2])
     return results
@@ -90,23 +90,17 @@ def split_provisions(
         return [_make_fallback_provision(document_id, text, source_text, raw_path)]
 
     provisions = []
-    for i, (label_type, label, start) in enumerate(labels):
-        # Find the end of the label line
-        line_end = text.index("\n", start) if "\n" in text[start:] else len(text)
-
-        # Content starts after label line
-        content_start = line_end + 1
-
+    for i, (label_type, label, start, content_start) in enumerate(labels):
         # Content ends at next label or end of text
         if i + 1 < len(labels):
             content_end = labels[i + 1][2]
         else:
             content_end = len(text)
 
-        content = text[content_start:content_end].strip()
-
-        # Extract first line after label as a potential title hint
-        title = "unknown"
+        raw_content = text[content_start:content_end].strip()
+        title, content = _split_heading_tail(raw_content)
+        if not content:
+            continue
 
         provision_id = _make_provision_id(document_id, label)
         kind = _classify_kind(label)
@@ -126,13 +120,14 @@ def split_provisions(
             "evidence": {"quote": content},
         })
 
-    # Check for duplicate provision IDs
-    seen_ids = set()
+    # Keep IDs unique without losing the original source label.
+    id_counts = {}
     for p in provisions:
-        if p["provision_id"] in seen_ids:
-            p["provision_id"] = f"{p['provision_id']}-dup"
+        base_id = p["provision_id"]
+        id_counts[base_id] = id_counts.get(base_id, 0) + 1
+        if id_counts[base_id] > 1:
+            p["provision_id"] = f"{base_id}-dup-{id_counts[base_id]}"
             p["confidence"] = "low"
-        seen_ids.add(p["provision_id"])
 
     return provisions
 
@@ -156,6 +151,18 @@ def _make_fallback_provision(
         "review_status": "machine_extracted",
         "evidence": {"quote": snippet},
     }
+
+
+def _split_heading_tail(raw_content: str) -> tuple[str, str]:
+    """Split same-line heading text from following body when both exist."""
+    if "\n" not in raw_content:
+        return "unknown", raw_content
+
+    first_line, rest = raw_content.split("\n", 1)
+    body = rest.strip()
+    if body:
+        return first_line.strip() or "unknown", body
+    return "unknown", first_line.strip()
 
 
 def split_provisions_from_candidates(

@@ -150,6 +150,14 @@ class TestSplitProvisions:
 
         assert provisions[0]["locator"]["label"] == "4.1"
 
+    def test_duplicate_labels_get_unique_ids(self):
+        text = "4.1 要求\n\n内容A\n\n4.1 要求\n\n内容B\n\n4.1 要求\n\n内容C\n"
+        provisions = split_provisions(text, "test")
+
+        ids = [p["provision_id"] for p in provisions]
+        assert ids == ["test-4-1", "test-4-1-dup-2", "test-4-1-dup-3"]
+        assert len(set(ids)) == 3
+
 
 class TestSplitProvisionsFromCandidates:
     def test_reads_candidates_and_splits(self, tmp_path):

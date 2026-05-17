@@ -186,6 +186,31 @@ class TestValidateCandidateChain:
         errors = validate_candidate_chain("test", candidates_dir=tmp_path / "candidates")
         assert len(errors) == 0
 
+    def test_chain_accepts_legacy_metadata_without_document_id(self, tmp_path):
+        provisions = [
+            {
+                "provision_id": "test-4-1",
+                "locator": {"label": "4.1"},
+                "evidence": {"quote": "应安装"},
+                "document_id": "test",
+            },
+        ]
+        metadata = {
+            "title": "Test Standard",
+            "review_status": "draft",
+            "source_text": "sources/test.md",
+            "raw_path": "raw/test.pdf",
+        }
+        _write_candidate_fixtures(
+            tmp_path, "test",
+            metadata=metadata,
+            provisions=provisions,
+            requirements=[],
+        )
+
+        errors = validate_candidate_chain("test", candidates_dir=tmp_path / "candidates")
+        assert len(errors) == 0
+
     def test_missing_metadata(self, tmp_path):
         # No metadata file
         errors = validate_candidate_chain("nonexistent", candidates_dir=tmp_path / "candidates")
