@@ -131,27 +131,36 @@ Design decisions:
 
 ## Phase 4 — Evaluation Benchmark
 
-Goal: turn quality failures into a feedback loop.
+Status: MVP complete.
+
+Goal: establish deterministic benchmark layer with formal JSONL check schema and structured validation.
+
+Deliverables (MVP):
+
+- versioned check schema (`eval/qa/schema.md`) defining 7 deterministic check types;
+- eval runner (`tools/eval_candidates.py`) supporting all check types with structured failure reports;
+- 4 benchmark JSONL files: `phase4_smoke`, `gb-7258-2017_factq`, `gb-7258-2017_dateq`, `gb-7258-2017_citationq`;
+- 33 ground-truth checks across all check types for `gb-7258-2017`;
+- benchmark data is small-scale hand-written/deterministic fixture — no real PDF or full candidate artifacts committed.
 
 Commands:
 
 ```bash
-kb eval --qa eval/qa/*.jsonl
-kb eval-report
+.venv/bin/python tools/eval_candidates.py eval/qa/*.jsonl --document-id <id>
 ```
 
-Deliverables:
+Exit criteria (MVP — met):
 
-- benchmark JSONL files;
-- rubric implementation;
-- failure categories;
-- failure report to `_reviews/eval-failures/`.
-
-Exit criteria:
-
+- schema covers all 7 check types with unambiguous pass/fail semantics;
 - each ingested sample document has FactQ/DateQ/CitationQ;
-- cross-document samples have RelationQ/ComparisonQ/InferenceQ;
-- wrong version and missing exception failures are visible.
+- failure report includes category and severity per failed check.
+
+Remaining (post-MVP):
+
+- answer-engine grading — LLM-based answer quality evaluation;
+- LLM rubric — automated scoring against reference answers;
+- cross-document samples (RelationQ/ComparisonQ/InferenceQ);
+- wrong version and missing exception failure visibility.
 
 ## Phase 5 — Optional Graph and Vector Layers
 

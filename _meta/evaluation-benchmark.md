@@ -4,6 +4,21 @@ This project should include a benchmark from the beginning. The goal is not only
 
 Inspired by NeuReg and medical benchmark projects that separate factual, relational, comparative and inferential questions.
 
+## Phase 4 MVP Scope
+
+**Phase 4 MVP is deterministic checks, not answer-engine grading.**
+
+The MVP layer validates that the pipeline's structural outputs (documents, provisions, requirements, metadata, topic tags) are correct and complete. It does not score natural-language answers.
+
+Deterministic checks are defined in [`eval/qa/schema.md`](../eval/qa/schema.md), which specifies:
+
+- a JSONL wire format with common fields (`id`, `type`, `category`, `severity`, `expected`, `notes`);
+- seven check types covering document existence, provision labels, keyword search, requirement modalities, evidence quotes, metadata fields, and topic tags;
+- three severity levels: `info`, `warn`, `error`;
+- eight failure categories covering structural and semantic gaps.
+
+Answer-engine grading (rubric scoring over natural-language answers) remains a future milestone, likely aligned with Phase 6.
+
 ## Question Types
 
 ```text
@@ -42,13 +57,12 @@ Recommended JSONL format:
 ## Recommended Files
 
 ```text
-eval/qa/factq.jsonl
-eval/qa/relationq.jsonl
-eval/qa/comparisonq.jsonl
-eval/qa/inferenceq.jsonl
-eval/qa/exceptionq.jsonl
-eval/qa/dateq.jsonl
-eval/qa/citationq.jsonl
+eval/qa/schema.md                          ← deterministic check schema (Phase 4 MVP)
+eval/qa/phase3_5_smoke.jsonl               ← Phase 3.5 smoke checks
+eval/qa/phase4_smoke.jsonl                 ← Phase 4 extended checks (planned)
+eval/qa/gb-7258-2017_factq.jsonl           ← deterministic FactQ-style checks
+eval/qa/gb-7258-2017_dateq.jsonl           ← deterministic DateQ-style checks
+eval/qa/gb-7258-2017_citationq.jsonl       ← deterministic CitationQ-style checks
 eval/rubric.md
 eval/golden/README.md
 ```
@@ -125,6 +139,7 @@ eval/golden/README.md
 ```text
 - missed_document
 - missed_provision
+- missed_requirement
 - wrong_version
 - unsupported_answer
 - citation_missing
@@ -132,6 +147,8 @@ eval/golden/README.md
 - exception_dropped
 - condition_dropped
 - date_confusion
+- metadata_mismatch
+- topic_mismatch
 - overconfident_unknown
 ```
 

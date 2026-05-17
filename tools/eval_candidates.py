@@ -28,6 +28,14 @@ def _load_jsonl(path: Path) -> list[dict]:
     return records
 
 
+def _load_json(path: Path) -> dict | list | None:
+    """Load a JSON file, return None if missing."""
+    if not path.exists():
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def _load_metadata(path: Path) -> dict | None:
     """Load metadata from a YAML file, return None if missing."""
     if not path.exists():
@@ -38,18 +46,14 @@ def _load_metadata(path: Path) -> dict | None:
 
 def _metadata_to_document(meta: dict) -> dict:
     """Extract document fields from metadata dict."""
-    doc = {}
-    for key in ("document_id", "id", "standard_number", "title"):
-        if key in meta and meta[key] is not None:
-            doc[key] = meta[key]
-    return doc
+    return dict(meta)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Evaluate candidates against deterministic checks.",
     )
-    parser.add_argument("checks_jsonl", help="Path to checks JSONL file")
+    parser.add_argument("checks_jsonl", nargs="+", help="Path(s) to checks JSONL file")
     parser.add_argument("--candidates-dir", default="_candidates",
                         help="Root candidates directory (default: _candidates)")
     parser.add_argument("--document-id", required=True,
@@ -71,17 +75,29 @@ def main(argv=None):
     metadata_path = candidates_dir / "metadata" / f"{doc_id}.yaml"
     meta = _load_metadata(metadata_path)
     if meta:
-        documents = [_metadata_to_document(meta)]
+        doc = _metadata_to_document(meta)
+        # CLI --document-id is the canonical identifier; inject it so that
+        # metadata_field_equals (and other checks) can match even when the
+        # YAML only contains standard_id / title and no document_id.
+        doc["document_id"] = doc_id
+        documents = [doc]
     else:
         documents = []
+
+    # Load topic-tags
+    topic_tags_path = candidates_dir / "topic-tags" / f"{doc_id}.json"
+    topic_tags = _load_json(topic_tags_path) or {}
 
     context = {
         "documents": documents,
         "provisions": provisions,
         "requirements": requirements,
+        "topic_tags": topic_tags,
     }
 
-    checks = load_checks(args.checks_jsonl)
+    checks = []
+    for checks_path in args.checks_jsonl:
+        checks.extend(load_checks(checks_path))
     result = run_checks(checks, context)
 
     print(f"total: {result['total']}  passed: {result['passed']}  failed: {result['failed']}")

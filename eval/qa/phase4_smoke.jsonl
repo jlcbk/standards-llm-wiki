@@ -1,0 +1,7 @@
+{"id": "p4-01", "type": "document_id_exists", "expected": "gb-7258-2017"}
+{"id": "p4-02", "type": "provision_label_exists", "expected": {"document_id": "gb-7258-2017", "label": "3.1"}}
+{"id": "p4-03", "type": "keyword_search", "expected": {"keyword": "制动", "min_count": 1}}
+{"id": "p4-04", "type": "requirement_modality_exists", "expected": {"document_id": "gb-7258-2017", "modality": "must"}}
+{"id": "p4-05", "type": "evidence_quote_exists", "expected": {"document_id": "gb-7258-2017", "quote_substring": "乘用车"}}
+{"id": "p4-06", "type": "metadata_field_equals", "expected": {"document_id": "gb-7258-2017", "field": "standard_id", "value": "GB-7258-2017"}}
+{"id": "p4-07", "type": "topic_tag_exists", "expected": {"document_id": "gb-7258-2017", "topic": "lighting-system"}}
