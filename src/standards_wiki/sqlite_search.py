@@ -1,9 +1,16 @@
 """SQLite FTS5 search — query the exported database."""
 
+import re
 import sqlite3
 from pathlib import Path
 
 SNIPPET_MAX_LENGTH = 200
+
+_HAS_CJK_RE = re.compile(r"[一-鿿]")
+
+
+def _has_cjk(text: str) -> bool:
+    return bool(_HAS_CJK_RE.search(text))
 
 
 def _truncate(text: str, max_len: int = SNIPPET_MAX_LENGTH) -> str:
@@ -14,6 +21,10 @@ def _truncate(text: str, max_len: int = SNIPPET_MAX_LENGTH) -> str:
 
 def _escape_fts(query: str) -> str:
     return query.replace('"', '""')
+
+
+def _escape_like(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _search_documents(conn, query, document_id, review_status, limit):
@@ -37,6 +48,42 @@ def _search_documents(conn, query, document_id, review_status, limit):
     params.append(limit)
 
     rows = conn.execute(sql, params).fetchall()
+    if rows:
+        return _rows_to_documents(rows)
+
+    # LIKE fallback for CJK short words
+    if _has_cjk(query):
+        return _like_fallback_documents(conn, query, document_id, review_status, limit)
+
+    return _rows_to_documents(rows)
+
+
+def _like_fallback_documents(conn, query, document_id, review_status, limit):
+    sql = """
+        SELECT document_id, title, source_text,
+               document_type, review_status
+        FROM documents WHERE 1=1
+    """
+    params: list = []
+    sql += " AND (title LIKE ? ESCAPE '\\' OR source_text LIKE ? ESCAPE '\\')"
+    like_pat = f"%{_escape_like(query)}%"
+    params.extend([like_pat, like_pat])
+
+    if document_id is not None:
+        sql += " AND document_id = ?"
+        params.append(document_id)
+    if review_status is not None:
+        sql += " AND review_status = ?"
+        params.append(review_status)
+
+    sql += " LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(sql, params).fetchall()
+    return _rows_to_documents(rows)
+
+
+def _rows_to_documents(rows):
     return [
         {
             "type": "document",
@@ -72,6 +119,41 @@ def _search_provisions(conn, query, document_id, review_status, limit):
     params.append(limit)
 
     rows = conn.execute(sql, params).fetchall()
+    if rows:
+        return _rows_to_provisions(rows)
+
+    if _has_cjk(query):
+        return _like_fallback_provisions(conn, query, document_id, review_status, limit)
+
+    return _rows_to_provisions(rows)
+
+
+def _like_fallback_provisions(conn, query, document_id, review_status, limit):
+    sql = """
+        SELECT provision_id, document_id, label, kind,
+               title, text, confidence, review_status
+        FROM provisions WHERE 1=1
+    """
+    params: list = []
+    sql += " AND (label LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' OR text LIKE ? ESCAPE '\\')"
+    like_pat = f"%{_escape_like(query)}%"
+    params.extend([like_pat, like_pat, like_pat])
+
+    if document_id is not None:
+        sql += " AND document_id = ?"
+        params.append(document_id)
+    if review_status is not None:
+        sql += " AND review_status = ?"
+        params.append(review_status)
+
+    sql += " LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(sql, params).fetchall()
+    return _rows_to_provisions(rows)
+
+
+def _rows_to_provisions(rows):
     return [
         {
             "type": "provision",
@@ -101,12 +183,47 @@ def _search_requirements(conn, query, document_id, review_status, limit):
     if document_id is not None:
         sql += " AND r.document_id = ?"
         params.append(document_id)
-    # requirements table has no review_status column — filter ignored
 
     sql += " ORDER BY rank LIMIT ?"
     params.append(limit)
 
     rows = conn.execute(sql, params).fetchall()
+    if rows:
+        return _rows_to_requirements(rows)
+
+    if _has_cjk(query):
+        return _like_fallback_requirements(conn, query, document_id, limit)
+
+    return _rows_to_requirements(rows)
+
+
+def _like_fallback_requirements(conn, query, document_id, limit):
+    sql = """
+        SELECT requirement_id, document_id, provision_id,
+               modality, subject, action, object, evidence_quote
+        FROM requirements WHERE 1=1
+    """
+    params: list = []
+    sql += (
+        " AND (modality LIKE ? ESCAPE '\\' OR subject LIKE ? ESCAPE '\\' "
+        "OR action LIKE ? ESCAPE '\\' OR object LIKE ? ESCAPE '\\' "
+        "OR evidence_quote LIKE ? ESCAPE '\\')"
+    )
+    like_pat = f"%{_escape_like(query)}%"
+    params.extend([like_pat, like_pat, like_pat, like_pat, like_pat])
+
+    if document_id is not None:
+        sql += " AND document_id = ?"
+        params.append(document_id)
+
+    sql += " LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(sql, params).fetchall()
+    return _rows_to_requirements(rows)
+
+
+def _rows_to_requirements(rows):
     return [
         {
             "type": "requirement",

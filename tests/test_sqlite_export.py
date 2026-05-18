@@ -6,7 +6,7 @@ import sqlite3
 import yaml
 
 from standards_wiki.candidates import write_jsonl
-from standards_wiki.sqlite_export import export_sqlite
+from standards_wiki.sqlite_export import _FTS_TOKENIZER, export_sqlite
 
 
 def _write_fixtures(tmp_path, doc_id="gb-test-2024", with_topic_tags=True):
@@ -411,3 +411,68 @@ class TestExportSqlite:
         assert len(rows) == 1
         assert rows[0][0] == "gb-test-2024-1"
         assert rows[0][1] == "总则"
+
+
+class TestTokenizerSelection:
+    """Phase 5.5-03: Verify tokenizer detection and CJK search behavior."""
+
+    def test_tokenizer_is_valid(self):
+        assert _FTS_TOKENIZER in ("trigram", "unicode61")
+
+    def test_fts_uses_detected_tokenizer(self, tmp_path):
+        cand = _write_fixtures(tmp_path)
+        out = tmp_path / "kb.sqlite"
+        export_sqlite(str(cand), str(out))
+
+        conn = sqlite3.connect(str(out))
+        # Read the SQL used to create documents_fts
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE name='documents_fts'"
+        ).fetchone()
+        conn.close()
+
+        assert row is not None
+        assert f"tokenize='{_FTS_TOKENIZER}'" in row[0]
+
+    def test_cjk_short_word_in_provisions_fts(self, tmp_path):
+        """CJK words must be findable via FTS or LIKE in provisions."""
+        cand = _write_fixtures(tmp_path)
+        # Add provision with CJK short words
+        prov_dir = cand / "provisions"
+        write_jsonl(
+            [
+                {
+                    "provision_id": "gb-test-2024-2",
+                    "document_id": "gb-test-2024",
+                    "label": "2",
+                    "kind": "section",
+                    "title": "制动系统",
+                    "text": "制动系统座椅校车机动车",
+                    "locator": {"label": "2", "occurrence": 1},
+                    "confidence": "low",
+                    "review_status": "machine_extracted",
+                }
+            ],
+            prov_dir / "gb-test-2024-extra.jsonl",
+        )
+        out = tmp_path / "kb.sqlite"
+        export_sqlite(str(cand), str(out))
+
+        conn = sqlite3.connect(str(out))
+        for word in ["制动", "座椅", "校车", "机动车"]:
+            # Try FTS MATCH first; if no results, use LIKE fallback.
+            # Trigram tokenizer may not match 2-char CJK via MATCH alone.
+            try:
+                rows = conn.execute(
+                    "SELECT provision_id FROM provisions_fts WHERE provisions_fts MATCH ?",
+                    [word],
+                ).fetchall()
+            except Exception:
+                rows = []
+            if not rows:
+                rows = conn.execute(
+                    "SELECT provision_id FROM provisions WHERE text LIKE ?",
+                    [f"%{word}%"],
+                ).fetchall()
+            assert len(rows) >= 1, f"{word!r} not found via FTS or LIKE"
+        conn.close()

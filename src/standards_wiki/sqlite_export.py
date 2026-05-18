@@ -8,6 +8,34 @@ import yaml
 
 from .candidates import read_jsonl
 
+# Prefer trigram tokenizer for CJK substring matching (available in SQLite ≥ 3.34.0
+# with SQLITE_ENABLE_FTS5_TRIGRAM).  Falls back to unicode61 if trigram is not
+# compiled into the local SQLite build.
+_FTS_TOKENIZER = "unicode61"
+
+
+def _detect_trigram_support() -> str:
+    """Return 'trigram' if the runtime SQLite supports it, else 'unicode61'."""
+    import sqlite3 as _sq
+
+    conn = _sq.connect(":memory:")
+    try:
+        conn.execute(
+            "CREATE VIRTUAL TABLE _trigram_test USING fts5(x, tokenize='trigram')"
+        )
+        return "trigram"
+    except Exception:
+        return "unicode61"
+    finally:
+        conn.close()
+
+
+# One-time detection at import time.
+try:
+    _FTS_TOKENIZER = _detect_trigram_support()
+except Exception:
+    pass
+
 
 def _load_yaml(path: Path) -> dict:
     if not path.exists():
@@ -70,7 +98,8 @@ def _load_topic_tags(candidates_dir: Path) -> dict:
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript("""
+    tok = _FTS_TOKENIZER
+    conn.executescript(f"""
         DROP TABLE IF EXISTS requirement_entities;
         DROP TABLE IF EXISTS requirement_topics;
         DROP TABLE IF EXISTS provision_entities;
@@ -93,14 +122,14 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             confidence    TEXT NOT NULL DEFAULT '',
             review_status TEXT NOT NULL DEFAULT '',
             path          TEXT NOT NULL DEFAULT '',
-            metadata_json TEXT NOT NULL DEFAULT '{}'
+            metadata_json TEXT NOT NULL DEFAULT '{{}}'
         );
 
         CREATE VIRTUAL TABLE documents_fts USING fts5(
             document_id UNINDEXED,
             title,
             source_text,
-            tokenize='unicode61'
+            tokenize='{tok}'
         );
 
         CREATE TABLE provisions (
@@ -110,11 +139,11 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             kind          TEXT NOT NULL DEFAULT '',
             title         TEXT NOT NULL DEFAULT '',
             text          TEXT NOT NULL DEFAULT '',
-            locator_json  TEXT NOT NULL DEFAULT '{}',
+            locator_json  TEXT NOT NULL DEFAULT '{{}}',
             confidence    TEXT NOT NULL DEFAULT '',
             review_status TEXT NOT NULL DEFAULT '',
             path          TEXT NOT NULL DEFAULT '',
-            record_json   TEXT NOT NULL DEFAULT '{}',
+            record_json   TEXT NOT NULL DEFAULT '{{}}',
             topics_json   TEXT NOT NULL DEFAULT '[]',
             entities_json TEXT NOT NULL DEFAULT '[]'
         );
@@ -125,7 +154,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             label,
             title,
             text,
-            tokenize='unicode61'
+            tokenize='{tok}'
         );
 
         CREATE TABLE requirements (
@@ -137,7 +166,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             action         TEXT NOT NULL DEFAULT '',
             object         TEXT NOT NULL DEFAULT '',
             evidence_quote TEXT NOT NULL DEFAULT '',
-            record_json    TEXT NOT NULL DEFAULT '{}',
+            record_json    TEXT NOT NULL DEFAULT '{{}}',
             topics_json    TEXT NOT NULL DEFAULT '[]',
             entities_json  TEXT NOT NULL DEFAULT '[]'
         );
@@ -151,7 +180,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             action,
             object,
             evidence_quote,
-            tokenize='unicode61'
+            tokenize='{tok}'
         );
 
         CREATE TABLE IF NOT EXISTS provision_topics (

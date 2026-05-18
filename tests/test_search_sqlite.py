@@ -10,6 +10,18 @@ from standards_wiki.sqlite_search import search_sqlite
 
 DOC_ID = "gb-test-2024"
 
+# Provision text includes CJK short words for search stability testing:
+# 制动 (braking), 座椅 (seat), 校车 (school bus), 机动车 (motor vehicle)
+PROVISION_TEXT = (
+    "本标准规定了机动车运行安全技术条件。"
+    "制动系统应满足基本要求。"
+    "座椅及其固定装置应牢固。"
+    "校车应配备安全带。"
+    "vehiclesafety ALLTEST"
+)
+
+REQUIREMENT_EVIDENCE = "机动车必须符合安全技术条件 ALLTEST 制动 座椅 校车"
+
 
 def _build_db(tmp_path, doc_id=DOC_ID):
     """Create a test database via the P5-01 exporter."""
@@ -41,7 +53,7 @@ def _build_db(tmp_path, doc_id=DOC_ID):
                 "label": "1",
                 "kind": "section",
                 "title": "总则",
-                "text": "本标准规定了机动车运行安全技术条件。vehiclesafety ALLTEST",
+                "text": PROVISION_TEXT,
                 "locator": {"label": "1", "occurrence": 1},
                 "confidence": "low",
                 "review_status": "machine_extracted",
@@ -62,7 +74,7 @@ def _build_db(tmp_path, doc_id=DOC_ID):
                 "subject": "机动车",
                 "action": "符合",
                 "object": "安全技术条件",
-                "evidence": {"quote": "机动车必须符合安全技术条件 ALLTEST"},
+                "evidence": {"quote": REQUIREMENT_EVIDENCE},
                 "confidence": "low",
                 "review_status": "machine_extracted",
             }
@@ -130,6 +142,64 @@ class TestSearchRequirements:
         results = search_sqlite(db, "安全技术条件", mode="requirements")
 
         assert len(results) >= 1
+
+
+class TestCJKShortWordSearch:
+    """Phase 5.5-03: Validate CJK short-word / substring search stability."""
+
+    def test_provision_short_word_braking(self, tmp_path):
+        """制动 (2-char CJK word) must match provision text."""
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "制动", mode="provisions")
+        assert len(results) >= 1
+        assert any("制动" in r["snippet"] for r in results)
+
+    def test_provision_short_word_seat(self, tmp_path):
+        """座椅 (2-char CJK word) must match provision text."""
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "座椅", mode="provisions")
+        assert len(results) >= 1
+        assert any("座椅" in r["snippet"] for r in results)
+
+    def test_provision_short_word_school_bus(self, tmp_path):
+        """校车 (2-char CJK word) must match provision text."""
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "校车", mode="provisions")
+        assert len(results) >= 1
+        assert any("校车" in r["snippet"] for r in results)
+
+    def test_provision_three_char_word(self, tmp_path):
+        """机动车 (3-char CJK word) must match provision text."""
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "机动车", mode="provisions")
+        assert len(results) >= 1
+        assert any("机动车" in r["snippet"] for r in results)
+
+    def test_requirement_short_word_braking(self, tmp_path):
+        """制动 must also match in requirement evidence_quote."""
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "制动", mode="requirements")
+        assert len(results) >= 1
+
+    def test_requirement_three_char_word(self, tmp_path):
+        """机动车 must match requirement subject."""
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "机动车", mode="requirements")
+        assert len(results) >= 1
+
+    def test_english_token_vehiclesafety(self, tmp_path):
+        """ASCII compound token must still match."""
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "vehiclesafety", mode="provisions")
+        assert len(results) >= 1
+
+    def test_english_token_alltest(self, tmp_path):
+        """ASCII token ALLTEST must still match across modes."""
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "ALLTEST", mode="all")
+        types = {r["type"] for r in results}
+        assert "provision" in types
+        assert "requirement" in types
 
 
 class TestDocumentIdFilter:
