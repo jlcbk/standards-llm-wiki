@@ -23,7 +23,7 @@ PROVISION_TEXT = (
 REQUIREMENT_EVIDENCE = "机动车必须符合安全技术条件 ALLTEST 制动 座椅 校车"
 
 
-def _build_db(tmp_path, doc_id=DOC_ID):
+def _build_db(tmp_path, doc_id=DOC_ID, include_topic_tags=True):
     """Create a test database via the P5-01 exporter."""
     cand = tmp_path / "_candidates"
 
@@ -81,6 +81,30 @@ def _build_db(tmp_path, doc_id=DOC_ID):
         ],
         req_dir / f"{doc_id}.jsonl",
     )
+
+    if include_topic_tags:
+        tt_dir = cand / "topic-tags"
+        tt_dir.mkdir(parents=True)
+        tt_data = {
+            "document_id": doc_id,
+            "provisions": [
+                {
+                    "id": f"{doc_id}-1",
+                    "topics": ["braking", "seats"],
+                    "entities": ["vehicle", "passenger"],
+                }
+            ],
+            "requirements": [
+                {
+                    "id": f"{doc_id}-1-r1",
+                    "topics": ["safety"],
+                    "entities": ["vehicle"],
+                }
+            ],
+        }
+        (tt_dir / f"{doc_id}.json").write_text(
+            json.dumps(tt_data, ensure_ascii=False), encoding="utf-8"
+        )
 
     db_path = tmp_path / "kb.sqlite"
     export_sqlite(str(cand), str(db_path))
@@ -303,3 +327,236 @@ class TestJsonSerializable:
         assert isinstance(serialized, str)
         parsed = json.loads(serialized)
         assert parsed == results
+
+
+# ---------------------------------------------------------------------------
+# Phase 5.5-04: Topic / Entity filter tests
+# ---------------------------------------------------------------------------
+
+
+class TestTopicFilterProvisions:
+    """Provisions + --topic hit / miss."""
+
+    def test_topic_hit(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "vehiclesafety", mode="provisions", topic="braking"
+        )
+        assert len(results) == 1
+        assert results[0]["type"] == "provision"
+
+    def test_topic_miss(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "vehiclesafety", mode="provisions", topic="nonexistent-topic"
+        )
+        assert len(results) == 0
+
+
+class TestEntityFilterProvisions:
+    """Provisions + --entity hit / miss."""
+
+    def test_entity_hit(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "vehiclesafety", mode="provisions", entity="vehicle"
+        )
+        assert len(results) == 1
+
+    def test_entity_miss(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "vehiclesafety", mode="provisions", entity="nonexistent-entity"
+        )
+        assert len(results) == 0
+
+
+class TestTopicEntityFilterRequirements:
+    """Requirements + topic/entity hit."""
+
+    def test_topic_hit(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "机动车", mode="requirements", topic="safety"
+        )
+        assert len(results) == 1
+        assert results[0]["type"] == "requirement"
+
+    def test_entity_hit(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "机动车", mode="requirements", entity="vehicle"
+        )
+        assert len(results) == 1
+
+    def test_topic_miss(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "机动车", mode="requirements", topic="nonexistent"
+        )
+        assert len(results) == 0
+
+
+class TestTopicEntityFilterDocuments:
+    """Documents mode returns [] when topic/entity specified."""
+
+    def test_topic_returns_empty(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "测试标准", mode="documents", topic="braking"
+        )
+        assert results == []
+
+    def test_entity_returns_empty(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "测试标准", mode="documents", entity="vehicle"
+        )
+        assert results == []
+
+
+class TestModeAllWithTopicFilter:
+    """mode=all + topic should not return document type."""
+
+    def test_no_documents_with_topic(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "ALLTEST", mode="all", topic="braking")
+        types = {r["type"] for r in results}
+        assert "document" not in types
+
+    def test_provisions_still_filtered_by_topic(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "ALLTEST", mode="all", topic="braking")
+        # provision gb-test-2024-1 has topic "braking"
+        assert any(r["type"] == "provision" for r in results)
+
+    def test_requirements_miss_topic(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(db, "ALLTEST", mode="all", topic="nonexistent")
+        # No provision/requirement has this topic
+        assert len(results) == 0
+
+
+class TestTopicAndEntityCombined:
+    """topic + entity combined filter."""
+
+    def test_both_match(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "vehiclesafety", mode="provisions",
+            topic="braking", entity="vehicle",
+        )
+        assert len(results) == 1
+
+    def test_one_mismatch_excludes(self, tmp_path):
+        db = _build_db(tmp_path)
+        results = search_sqlite(
+            db, "vehiclesafety", mode="provisions",
+            topic="braking", entity="nonexistent",
+        )
+        assert len(results) == 0
+
+
+class TestOldSchemaGracefulDegradation:
+    """When junction tables are missing, filters return []."""
+
+    def test_empty_junction_topic_returns_empty(self, tmp_path):
+        """Junction tables exist but empty — EXISTS returns no matches."""
+        db = _build_db(tmp_path, include_topic_tags=False)
+        results = search_sqlite(
+            db, "vehiclesafety", mode="provisions", topic="braking"
+        )
+        assert results == []
+
+    def test_empty_junction_entity_returns_empty(self, tmp_path):
+        db = _build_db(tmp_path, include_topic_tags=False)
+        results = search_sqlite(
+            db, "vehiclesafety", mode="provisions", entity="vehicle"
+        )
+        assert results == []
+
+    def test_empty_junction_no_filter_still_works(self, tmp_path):
+        db = _build_db(tmp_path, include_topic_tags=False)
+        results = search_sqlite(db, "vehiclesafety", mode="provisions")
+        assert len(results) == 1
+
+    def test_no_junction_tables_graceful(self, tmp_path):
+        """Simulate a truly old schema by dropping junction tables."""
+        import sqlite3
+
+        db = _build_db(tmp_path, include_topic_tags=False)
+        conn = sqlite3.connect(str(db))
+        for t in ["provision_topics", "provision_entities",
+                   "requirement_topics", "requirement_entities"]:
+            conn.execute(f"DROP TABLE IF EXISTS {t}")
+        conn.commit()
+        conn.close()
+
+        results = search_sqlite(
+            db, "vehiclesafety", mode="provisions", topic="braking"
+        )
+        assert results == []
+
+    def test_no_junction_tables_no_filter_works(self, tmp_path):
+        import sqlite3
+
+        db = _build_db(tmp_path, include_topic_tags=False)
+        conn = sqlite3.connect(str(db))
+        for t in ["provision_topics", "provision_entities",
+                   "requirement_topics", "requirement_entities"]:
+            conn.execute(f"DROP TABLE IF EXISTS {t}")
+        conn.commit()
+        conn.close()
+
+        results = search_sqlite(db, "vehiclesafety", mode="provisions")
+        assert len(results) == 1
+
+
+class TestCLITopicEntityArgs:
+    """CLI argument parsing and output."""
+
+    def test_cli_topic_filter(self, tmp_path):
+        from tools.search_sqlite import main as cli_main
+        import io
+        from contextlib import redirect_stdout
+
+        db = _build_db(tmp_path)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli_main([
+                "vehiclesafety", "--db", str(db),
+                "--mode", "provisions", "--topic", "braking",
+            ])
+        output = json.loads(buf.getvalue())
+        assert len(output) == 1
+        assert output[0]["type"] == "provision"
+
+    def test_cli_entity_filter(self, tmp_path):
+        from tools.search_sqlite import main as cli_main
+        import io
+        from contextlib import redirect_stdout
+
+        db = _build_db(tmp_path)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli_main([
+                "vehiclesafety", "--db", str(db),
+                "--mode", "provisions", "--entity", "vehicle",
+            ])
+        output = json.loads(buf.getvalue())
+        assert len(output) == 1
+
+    def test_cli_no_filter_default(self, tmp_path):
+        from tools.search_sqlite import main as cli_main
+        import io
+        from contextlib import redirect_stdout
+
+        db = _build_db(tmp_path)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli_main([
+                "vehiclesafety", "--db", str(db),
+                "--mode", "provisions",
+            ])
+        output = json.loads(buf.getvalue())
+        assert len(output) == 1

@@ -36,6 +36,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--review-status", default=None, help="Filter by review status"
     )
+    parser.add_argument(
+        "--topic", default=None, help="Filter by topic tag"
+    )
+    parser.add_argument(
+        "--entity", default=None, help="Filter by entity tag"
+    )
 
     args = parser.parse_args(argv)
 
@@ -47,6 +53,8 @@ def main(argv: list[str] | None = None) -> None:
             document_id=args.document_id,
             limit=args.limit,
             review_status=args.review_status,
+            topic=args.topic,
+            entity=args.entity,
         )
     except FileNotFoundError as e:
         print(str(e), file=sys.stderr)
