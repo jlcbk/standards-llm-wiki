@@ -208,6 +208,61 @@ class TestCollectRecords:
         assert "draft_path" in doc
 
 
+class TestCollectTopicTags:
+    def test_collects_topic_tags(self, tmp_path):
+        cand, drafts = _write_fixtures(tmp_path, doc_id="gb-test-2024")
+        tags_dir = cand / "topic-tags"
+        tags_dir.mkdir(parents=True)
+        tags = {
+            "document_id": "gb-test-2024",
+            "provisions": [
+                {
+                    "id": "gb-test-2024-3-1",
+                    "topics": ["braking-system"],
+                    "entities": ["vehicle"],
+                    "matched_keywords": {},
+                }
+            ],
+            "requirements": [
+                {
+                    "id": "gb-test-2024-3-1-r1",
+                    "topics": ["seats"],
+                    "entities": ["component"],
+                    "matched_keywords": {},
+                }
+            ],
+        }
+        (tags_dir / "gb-test-2024.json").write_text(
+            json.dumps(tags, ensure_ascii=False), encoding="utf-8"
+        )
+        result = collect_records(candidates_dir=cand, drafts_dir=drafts)
+
+        assert ("provision", "gb-test-2024-3-1") in result.topic_tags
+        assert result.topic_tags[("provision", "gb-test-2024-3-1")]["topics"] == ["braking-system"]
+        assert ("requirement", "gb-test-2024-3-1-r1") in result.topic_tags
+        assert result.topic_tags[("requirement", "gb-test-2024-3-1-r1")]["entities"] == ["component"]
+
+    def test_topic_tags_missing_dir(self, tmp_path):
+        cand, drafts = _write_fixtures(tmp_path)
+        result = collect_records(candidates_dir=cand, drafts_dir=drafts)
+        assert result.topic_tags == {}
+
+    def test_topic_tags_empty_entries(self, tmp_path):
+        cand, drafts = _write_fixtures(tmp_path, doc_id="gb-test-2024")
+        tags_dir = cand / "topic-tags"
+        tags_dir.mkdir(parents=True)
+        tags = {
+            "document_id": "gb-test-2024",
+            "provisions": [{"id": "", "topics": [], "entities": []}],
+            "requirements": [],
+        }
+        (tags_dir / "gb-test-2024.json").write_text(
+            json.dumps(tags, ensure_ascii=False), encoding="utf-8"
+        )
+        result = collect_records(candidates_dir=cand, drafts_dir=drafts)
+        assert result.topic_tags == {}
+
+
 class TestGenerateMarkdownIndexes:
     def test_generates_documents_index(self, tmp_path):
         documents = [

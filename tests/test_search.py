@@ -1,9 +1,13 @@
 """Tests for deterministic search."""
 
+import sqlite3
+
 import yaml
 
 from standards_wiki.candidates import write_jsonl
 from standards_wiki.search import search, format_results, SearchResult
+from standards_wiki.sqlite_export import export_sqlite
+from standards_wiki.indexer import collect_records
 
 
 def _write_fixtures(tmp_path, doc_id="gb-test-2024"):
@@ -168,3 +172,32 @@ class TestFormatResults:
     def test_format_empty(self):
         output = format_results([])
         assert "No results found" in output
+
+
+class TestSearchSQLite:
+    def _build_db(self, tmp_path):
+        cand, drafts = _write_fixtures(tmp_path)
+        result = collect_records(candidates_dir=cand, drafts_dir=drafts)
+        db_path = tmp_path / "test.sqlite"
+        export_sqlite(result, db_path)
+        return db_path
+
+    def test_search_via_sqlite(self, tmp_path):
+        db_path = self._build_db(tmp_path)
+        hits = search("机动车", db_path=str(db_path))
+        assert len(hits) >= 1
+
+    def test_sqlite_search_short_query(self, tmp_path):
+        db_path = self._build_db(tmp_path)
+        hits = search("座椅", db_path=str(db_path))
+        prov_hits = [h for h in hits if h.record_type == "provision"]
+        assert len(prov_hits) >= 1
+
+    def test_sqlite_fallback_no_db(self, tmp_path):
+        hits = search("机动车", db_path=str(tmp_path / "nonexistent.sqlite"))
+        assert hits == []
+
+    def test_sqlite_no_results(self, tmp_path):
+        db_path = self._build_db(tmp_path)
+        hits = search("不存在的查询词xyz", db_path=str(db_path))
+        assert hits == []

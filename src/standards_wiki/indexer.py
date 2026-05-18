@@ -19,6 +19,7 @@ class IndexResult:
     documents: list[dict] = field(default_factory=list)
     provisions: list[dict] = field(default_factory=list)
     requirements: list[dict] = field(default_factory=list)
+    topic_tags: dict[tuple[str, str], dict] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -73,6 +74,7 @@ def collect_records(
     _collect_documents(candidates_dir, drafts_dir, result)
     _collect_provisions(candidates_dir, result)
     _collect_requirements(candidates_dir, result)
+    _collect_topic_tags(candidates_dir, result)
 
     result.documents.sort(key=lambda d: d.get("document_id", ""))
     result.provisions.sort(key=lambda p: p.get("provision_id", ""))
@@ -234,6 +236,36 @@ def _collect_requirements(candidates_dir: Path, result: IndexResult) -> None:
                 "source_text": evidence.get("source_text", "unknown"),
                 "raw_path": evidence.get("raw_path", "unknown"),
             })
+
+
+def _collect_topic_tags(candidates_dir: Path, result: IndexResult) -> None:
+    """Collect topic/entity tags from _candidates/topic-tags/*.json."""
+    tags_dir = candidates_dir / "topic-tags"
+    if not tags_dir.exists():
+        return
+
+    for tags_path in sorted(tags_dir.glob("*.json")):
+        try:
+            data = json.loads(tags_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            result.warnings.append(f"Failed to read {tags_path}: {e}")
+            continue
+
+        for entry in data.get("provisions", []):
+            rid = entry.get("id", "")
+            if rid:
+                result.topic_tags[("provision", rid)] = {
+                    "topics": entry.get("topics", []),
+                    "entities": entry.get("entities", []),
+                }
+
+        for entry in data.get("requirements", []):
+            rid = entry.get("id", "")
+            if rid:
+                result.topic_tags[("requirement", rid)] = {
+                    "topics": entry.get("topics", []),
+                    "entities": entry.get("entities", []),
+                }
 
 
 # --- Markdown index generation ---
