@@ -17,13 +17,19 @@ def _load_yaml(path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _load_topic_tags(candidates_dir: Path) -> dict[str, dict]:
-    """Load topic-tags/{doc_id}.json, keyed by provision_id."""
+def _load_topic_tags(candidates_dir: Path) -> dict:
+    """Load topic-tags/{doc_id}.json.
+
+    Returns dict with 'provisions' and 'requirements' keys,
+    each mapping id -> {topics, entities}.
+    """
     tt_dir = candidates_dir / "topic-tags"
     if not tt_dir.exists():
-        return {}
+        return {"provisions": {}, "requirements": {}}
 
-    result: dict[str, dict] = {}
+    provisions: dict[str, dict] = {}
+    requirements: dict[str, dict] = {}
+
     for tt_path in sorted(tt_dir.glob("*.json")):
         try:
             data = json.loads(tt_path.read_text(encoding="utf-8"))
@@ -32,15 +38,43 @@ def _load_topic_tags(candidates_dir: Path) -> dict[str, dict]:
         for prov in data.get("provisions", []):
             pid = prov.get("id", "")
             if pid:
-                result[pid] = {
-                    "topics": prov.get("topics", []),
-                    "entities": prov.get("entities", []),
-                }
-    return result
+                new_topics = prov.get("topics", [])
+                new_entities = prov.get("entities", [])
+                if pid in provisions:
+                    provisions[pid] = {
+                        "topics": sorted(set(provisions[pid]["topics"]) | set(new_topics)),
+                        "entities": sorted(set(provisions[pid]["entities"]) | set(new_entities)),
+                    }
+                else:
+                    provisions[pid] = {
+                        "topics": list(new_topics),
+                        "entities": list(new_entities),
+                    }
+        for req in data.get("requirements", []):
+            rid = req.get("id", "")
+            if rid:
+                new_topics = req.get("topics", [])
+                new_entities = req.get("entities", [])
+                if rid in requirements:
+                    requirements[rid] = {
+                        "topics": sorted(set(requirements[rid]["topics"]) | set(new_topics)),
+                        "entities": sorted(set(requirements[rid]["entities"]) | set(new_entities)),
+                    }
+                else:
+                    requirements[rid] = {
+                        "topics": list(new_topics),
+                        "entities": list(new_entities),
+                    }
+
+    return {"provisions": provisions, "requirements": requirements}
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
     conn.executescript("""
+        DROP TABLE IF EXISTS requirement_entities;
+        DROP TABLE IF EXISTS requirement_topics;
+        DROP TABLE IF EXISTS provision_entities;
+        DROP TABLE IF EXISTS provision_topics;
         DROP TABLE IF EXISTS requirements;
         DROP TABLE IF EXISTS requirements_fts;
         DROP TABLE IF EXISTS provisions;
@@ -119,6 +153,30 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             evidence_quote,
             tokenize='unicode61'
         );
+
+        CREATE TABLE IF NOT EXISTS provision_topics (
+            provision_id TEXT NOT NULL,
+            topic        TEXT NOT NULL,
+            PRIMARY KEY (provision_id, topic)
+        );
+
+        CREATE TABLE IF NOT EXISTS provision_entities (
+            provision_id TEXT NOT NULL,
+            entity       TEXT NOT NULL,
+            PRIMARY KEY (provision_id, entity)
+        );
+
+        CREATE TABLE IF NOT EXISTS requirement_topics (
+            requirement_id TEXT NOT NULL,
+            topic          TEXT NOT NULL,
+            PRIMARY KEY (requirement_id, topic)
+        );
+
+        CREATE TABLE IF NOT EXISTS requirement_entities (
+            requirement_id TEXT NOT NULL,
+            entity         TEXT NOT NULL,
+            PRIMARY KEY (requirement_id, entity)
+        );
     """)
 
 
@@ -166,7 +224,7 @@ def _insert_documents(
 
 
 def _insert_provisions(
-    conn: sqlite3.Connection, candidates_dir: Path, topic_tags: dict[str, dict]
+    conn: sqlite3.Connection, candidates_dir: Path, prov_tags: dict[str, dict]
 ) -> int:
     prov_dir = candidates_dir / "provisions"
     if not prov_dir.exists():
@@ -181,7 +239,7 @@ def _insert_provisions(
 
         for rec in records:
             pid = rec.get("provision_id", "")
-            tt = topic_tags.get(pid, {})
+            tt = prov_tags.get(pid, {})
             locator = rec.get("locator", {})
 
             row = {
@@ -217,7 +275,8 @@ def _insert_provisions(
 
 
 def _insert_requirements(
-    conn: sqlite3.Connection, candidates_dir: Path, topic_tags: dict[str, dict]
+    conn: sqlite3.Connection, candidates_dir: Path, req_tags: dict[str, dict],
+    prov_tags: dict[str, dict],
 ) -> int:
     req_dir = candidates_dir / "requirements"
     if not req_dir.exists():
@@ -234,7 +293,8 @@ def _insert_requirements(
             rid = rec.get("requirement_id", "")
             evidence = rec.get("evidence", {})
             prov_id = rec.get("provision_id", "")
-            tt = topic_tags.get(prov_id, {})
+            # requirement-specific tags take priority; fall back to provision tags
+            tt = req_tags.get(rid) or prov_tags.get(prov_id, {})
 
             row = {
                 "requirement_id": rid,
@@ -266,6 +326,63 @@ def _insert_requirements(
     return count
 
 
+def _insert_junction_tables(
+    conn: sqlite3.Connection, topic_tags: dict,
+) -> dict[str, int]:
+    """Insert rows into the 4 junction tables. Returns counts per table."""
+    prov_tags = topic_tags.get("provisions", {})
+    req_tags = topic_tags.get("requirements", {})
+
+    counts = {
+        "provision_topics": 0,
+        "provision_entities": 0,
+        "requirement_topics": 0,
+        "requirement_entities": 0,
+    }
+
+    for pid, tt in sorted(prov_tags.items()):
+        for topic in tt.get("topics", []):
+            before = conn.total_changes
+            conn.execute(
+                "INSERT OR IGNORE INTO provision_topics (provision_id, topic) "
+                "VALUES (?, ?)",
+                (pid, topic),
+            )
+            if conn.total_changes > before:
+                counts["provision_topics"] += 1
+        for entity in tt.get("entities", []):
+            before = conn.total_changes
+            conn.execute(
+                "INSERT OR IGNORE INTO provision_entities (provision_id, entity) "
+                "VALUES (?, ?)",
+                (pid, entity),
+            )
+            if conn.total_changes > before:
+                counts["provision_entities"] += 1
+
+    for rid, tt in sorted(req_tags.items()):
+        for topic in tt.get("topics", []):
+            before = conn.total_changes
+            conn.execute(
+                "INSERT OR IGNORE INTO requirement_topics (requirement_id, topic) "
+                "VALUES (?, ?)",
+                (rid, topic),
+            )
+            if conn.total_changes > before:
+                counts["requirement_topics"] += 1
+        for entity in tt.get("entities", []):
+            before = conn.total_changes
+            conn.execute(
+                "INSERT OR IGNORE INTO requirement_entities (requirement_id, entity) "
+                "VALUES (?, ?)",
+                (rid, entity),
+            )
+            if conn.total_changes > before:
+                counts["requirement_entities"] += 1
+
+    return counts
+
+
 def export_sqlite(candidates_dir: str | Path, out_path: str | Path) -> dict:
     """Build SQLite database with FTS5 from candidate data.
 
@@ -285,13 +402,16 @@ def export_sqlite(candidates_dir: str | Path, out_path: str | Path) -> dict:
         out_path.unlink()
 
     topic_tags = _load_topic_tags(candidates_dir)
+    prov_tags = topic_tags.get("provisions", {})
+    req_tags = topic_tags.get("requirements", {})
 
     conn = sqlite3.connect(str(out_path))
     try:
         _create_schema(conn)
         doc_count = _insert_documents(conn, candidates_dir)
-        prov_count = _insert_provisions(conn, candidates_dir, topic_tags)
-        req_count = _insert_requirements(conn, candidates_dir, topic_tags)
+        prov_count = _insert_provisions(conn, candidates_dir, prov_tags)
+        req_count = _insert_requirements(conn, candidates_dir, req_tags, prov_tags)
+        junc_counts = _insert_junction_tables(conn, topic_tags)
         conn.commit()
     finally:
         conn.close()
@@ -300,5 +420,9 @@ def export_sqlite(candidates_dir: str | Path, out_path: str | Path) -> dict:
         "documents": doc_count,
         "provisions": prov_count,
         "requirements": req_count,
+        "provision_topics": junc_counts["provision_topics"],
+        "provision_entities": junc_counts["provision_entities"],
+        "requirement_topics": junc_counts["requirement_topics"],
+        "requirement_entities": junc_counts["requirement_entities"],
         "path": str(out_path),
     }

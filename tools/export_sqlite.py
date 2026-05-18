@@ -27,6 +27,10 @@ def main(argv: list[str] | None = None) -> None:
     print(f"Documents: {result['documents']}")
     print(f"Provisions: {result['provisions']}")
     print(f"Requirements: {result['requirements']}")
+    print(f"Provision topics: {result['provision_topics']}")
+    print(f"Provision entities: {result['provision_entities']}")
+    print(f"Requirement topics: {result['requirement_topics']}")
+    print(f"Requirement entities: {result['requirement_entities']}")
 
 
 if __name__ == "__main__":

@@ -80,6 +80,13 @@ def _write_fixtures(tmp_path, doc_id="gb-test-2024", with_topic_tags=True):
                     "entities": ["motor-vehicle"],
                 }
             ],
+            "requirements": [
+                {
+                    "id": f"{doc_id}-1-r1",
+                    "topics": ["braking", "safety"],
+                    "entities": ["brake-system"],
+                }
+            ],
         }
         (tt_dir / f"{doc_id}.json").write_text(
             json.dumps(tt_data, ensure_ascii=False), encoding="utf-8"
@@ -246,4 +253,161 @@ class TestExportSqlite:
         assert result["documents"] == 0
         assert result["provisions"] == 0
         assert result["requirements"] == 0
+        assert result["provision_topics"] == 0
+        assert result["provision_entities"] == 0
+        assert result["requirement_topics"] == 0
+        assert result["requirement_entities"] == 0
         assert out.exists()
+
+    # --- junction table tests ---
+
+    def test_junction_tables_exist(self, tmp_path):
+        cand = _write_fixtures(tmp_path)
+        out = tmp_path / "kb.sqlite"
+        export_sqlite(str(cand), str(out))
+
+        conn = sqlite3.connect(str(out))
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        conn.close()
+
+        assert "provision_topics" in tables
+        assert "provision_entities" in tables
+        assert "requirement_topics" in tables
+        assert "requirement_entities" in tables
+
+    def test_provision_junction_rows(self, tmp_path):
+        cand = _write_fixtures(tmp_path, with_topic_tags=True)
+        out = tmp_path / "kb.sqlite"
+        result = export_sqlite(str(cand), str(out))
+
+        assert result["provision_topics"] == 2
+        assert result["provision_entities"] == 1
+
+        conn = sqlite3.connect(str(out))
+        topics = sorted(
+            r[0]
+            for r in conn.execute(
+                "SELECT topic FROM provision_topics WHERE provision_id='gb-test-2024-1'"
+            )
+        )
+        entities = sorted(
+            r[0]
+            for r in conn.execute(
+                "SELECT entity FROM provision_entities WHERE provision_id='gb-test-2024-1'"
+            )
+        )
+        conn.close()
+
+        assert topics == ["safety", "vehicle"]
+        assert entities == ["motor-vehicle"]
+
+    def test_requirement_junction_rows(self, tmp_path):
+        cand = _write_fixtures(tmp_path, with_topic_tags=True)
+        out = tmp_path / "kb.sqlite"
+        result = export_sqlite(str(cand), str(out))
+
+        assert result["requirement_topics"] == 2
+        assert result["requirement_entities"] == 1
+
+        conn = sqlite3.connect(str(out))
+        topics = sorted(
+            r[0]
+            for r in conn.execute(
+                "SELECT topic FROM requirement_topics WHERE requirement_id='gb-test-2024-1-r1'"
+            )
+        )
+        entities = sorted(
+            r[0]
+            for r in conn.execute(
+                "SELECT entity FROM requirement_entities WHERE requirement_id='gb-test-2024-1-r1'"
+            )
+        )
+        conn.close()
+
+        assert topics == ["braking", "safety"]
+        assert entities == ["brake-system"]
+
+    def test_missing_topic_tags_empty_junctions(self, tmp_path):
+        cand = _write_fixtures(tmp_path, with_topic_tags=False)
+        out = tmp_path / "kb.sqlite"
+        result = export_sqlite(str(cand), str(out))
+
+        assert result["provision_topics"] == 0
+        assert result["provision_entities"] == 0
+        assert result["requirement_topics"] == 0
+        assert result["requirement_entities"] == 0
+
+        conn = sqlite3.connect(str(out))
+        for table in [
+            "provision_topics",
+            "provision_entities",
+            "requirement_topics",
+            "requirement_entities",
+        ]:
+            count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            assert count == 0, f"{table} should be empty"
+        conn.close()
+
+    def test_duplicate_topic_entity_dedup(self, tmp_path):
+        cand = _write_fixtures(tmp_path, with_topic_tags=True)
+        tt_dir = cand / "topic-tags"
+
+        # Write a second topic-tags file for the same doc with overlapping entries
+        tt_data2 = {
+            "document_id": "gb-test-2024",
+            "provisions": [
+                {
+                    "id": "gb-test-2024-1",
+                    "topics": ["safety", "new-topic"],
+                    "entities": ["motor-vehicle", "new-entity"],
+                }
+            ],
+        }
+        (tt_dir / "gb-test-2024-extra.json").write_text(
+            json.dumps(tt_data2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        out = tmp_path / "kb.sqlite"
+        result = export_sqlite(str(cand), str(out))
+
+        conn = sqlite3.connect(str(out))
+        topics = sorted(
+            r[0]
+            for r in conn.execute(
+                "SELECT topic FROM provision_topics WHERE provision_id='gb-test-2024-1'"
+            )
+        )
+        entities = sorted(
+            r[0]
+            for r in conn.execute(
+                "SELECT entity FROM provision_entities WHERE provision_id='gb-test-2024-1'"
+            )
+        )
+        conn.close()
+
+        # "safety" appears in both files but should be deduplicated
+        assert topics == ["new-topic", "safety", "vehicle"]
+        assert entities == ["motor-vehicle", "new-entity"]
+
+    def test_join_topic_to_provision(self, tmp_path):
+        cand = _write_fixtures(tmp_path, with_topic_tags=True)
+        out = tmp_path / "kb.sqlite"
+        export_sqlite(str(cand), str(out))
+
+        conn = sqlite3.connect(str(out))
+        rows = conn.execute(
+            "SELECT p.provision_id, p.title "
+            "FROM provisions p "
+            "JOIN provision_topics pt ON p.provision_id = pt.provision_id "
+            "WHERE pt.topic = 'safety'"
+        ).fetchall()
+        conn.close()
+
+        assert len(rows) == 1
+        assert rows[0][0] == "gb-test-2024-1"
+        assert rows[0][1] == "总则"
