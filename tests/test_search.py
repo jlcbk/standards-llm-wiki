@@ -4,6 +4,7 @@ import yaml
 
 from standards_wiki.candidates import write_jsonl
 from standards_wiki.search import search, format_results, SearchResult
+from standards_wiki.sqlite_export import export_sqlite
 
 
 def _write_fixtures(tmp_path, doc_id="gb-test-2024"):
@@ -168,3 +169,146 @@ class TestFormatResults:
     def test_format_empty(self):
         output = format_results([])
         assert "No results found" in output
+
+
+# ---------------------------------------------------------------------------
+# Phase 5.5-05: Optional SQLite backend via db_path
+# ---------------------------------------------------------------------------
+
+
+def _build_sqlite_db(tmp_path, doc_id="gb-test-2024"):
+    """Create a SQLite DB via export_sqlite for search backend tests."""
+    cand = tmp_path / "_candidates"
+
+    meta_dir = cand / "metadata"
+    meta_dir.mkdir(parents=True)
+    meta = {
+        "title": "机动车运行安全技术条件",
+        "document_type": "standard",
+        "standard_id": "GB-TEST-2024",
+        "source_text": "sources/test.md",
+        "review_status": "draft",
+    }
+    (meta_dir / f"{doc_id}.yaml").write_text(
+        yaml.dump(meta, allow_unicode=True), encoding="utf-8"
+    )
+
+    prov_dir = cand / "provisions"
+    prov_dir.mkdir(parents=True)
+    write_jsonl(
+        [
+            {
+                "provision_id": f"{doc_id}-3-1",
+                "document_id": doc_id,
+                "label": "3.1",
+                "kind": "clause",
+                "title": "术语",
+                "text": "机动车应由动力装置驱动 座椅应符合安全要求",
+                "confidence": "low",
+                "review_status": "machine_extracted",
+            }
+        ],
+        prov_dir / f"{doc_id}.jsonl",
+    )
+
+    req_dir = cand / "requirements"
+    req_dir.mkdir(parents=True)
+    write_jsonl(
+        [
+            {
+                "requirement_id": f"{doc_id}-3-1-r1",
+                "document_id": doc_id,
+                "provision_id": f"{doc_id}-3-1",
+                "modality": "must",
+                "subject": "机动车",
+                "action": "符合",
+                "object": "安全技术条件",
+                "evidence": {"quote": "机动车应由动力装置驱动"},
+                "confidence": "low",
+                "review_status": "machine_extracted",
+            }
+        ],
+        req_dir / f"{doc_id}.jsonl",
+    )
+
+    db_path = tmp_path / "kb.sqlite"
+    export_sqlite(str(cand), str(db_path))
+    return str(db_path)
+
+
+class TestSearchSQLiteBackend:
+    """search(..., db_path=...) delegates to search_sqlite and returns SearchResult."""
+
+    def test_returns_search_results(self, tmp_path):
+        db = _build_sqlite_db(tmp_path)
+        hits = search("座椅", db_path=db)
+        assert len(hits) >= 1
+        assert all(isinstance(h, SearchResult) for h in hits)
+
+    def test_includes_provision(self, tmp_path):
+        db = _build_sqlite_db(tmp_path)
+        hits = search("座椅", db_path=db)
+        prov_hits = [h for h in hits if h.record_type == "provision"]
+        assert len(prov_hits) >= 1
+
+    def test_includes_requirement(self, tmp_path):
+        db = _build_sqlite_db(tmp_path)
+        hits = search("机动车", db_path=db)
+        req_hits = [h for h in hits if h.record_type == "requirement"]
+        assert len(req_hits) >= 1
+
+    def test_includes_document(self, tmp_path):
+        db = _build_sqlite_db(tmp_path)
+        hits = search("机动车运行安全技术条件", db_path=db)
+        doc_hits = [h for h in hits if h.record_type == "document"]
+        assert len(doc_hits) >= 1
+
+    def test_missing_db_returns_empty(self, tmp_path):
+        hits = search("anything", db_path=str(tmp_path / "nope.sqlite"))
+        assert hits == []
+
+    def test_limit_applied(self, tmp_path):
+        db = _build_sqlite_db(tmp_path)
+        hits = search("机动车", db_path=db, limit=1)
+        assert len(hits) <= 1
+
+    def test_no_db_path_uses_in_memory(self, tmp_path):
+        """Without db_path, the old in-memory path is used."""
+        cand, drafts = _write_fixtures(tmp_path)
+        hits = search("机动车", candidates_dir=str(cand), drafts_dir=str(drafts))
+        assert len(hits) >= 1
+        assert all(isinstance(h, SearchResult) for h in hits)
+
+
+class TestCLISQLiteBackend:
+    """tools/search.py --db-path uses SQLite backend."""
+
+    def test_cli_db_path_produces_output(self, tmp_path):
+        import io
+        from contextlib import redirect_stdout
+
+        from tools.search import main as cli_main
+
+        db = _build_sqlite_db(tmp_path)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli_main(["座椅", "--db-path", db])
+        output = buf.getvalue()
+        assert "provision" in output
+
+    def test_cli_no_db_path_uses_in_memory(self, tmp_path):
+        import io
+        from contextlib import redirect_stdout
+
+        from tools.search import main as cli_main
+
+        cand, drafts = _write_fixtures(tmp_path)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli_main([
+                "机动车",
+                "--candidates-dir", str(cand),
+                "--drafts-dir", str(drafts),
+            ])
+        output = buf.getvalue()
+        assert "Total:" in output

@@ -1,6 +1,9 @@
 """Deterministic local search over collected records."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from pathlib import Path
 
 from .indexer import IndexResult, collect_records
 
@@ -21,11 +24,32 @@ class SearchResult:
     matched_text: str
 
 
+def _convert_sqlite_row(row: dict) -> SearchResult:
+    """Convert a search_sqlite dict to SearchResult."""
+    rtype = row["type"]
+    title_map = {
+        "document": row.get("title", ""),
+        "provision": row.get("label", row.get("title", "")),
+        "requirement": row.get("modality", ""),
+    }
+    return SearchResult(
+        record_type=rtype,
+        record_id=row.get("id", ""),
+        title=title_map.get(rtype, ""),
+        review_status=row.get("review_status", ""),
+        source=row.get("document_id", ""),
+        matched_field="snippet",
+        matched_text=row.get("snippet", ""),
+    )
+
+
 def search(
     query: str,
     candidates_dir: str = _CANDIDATES_DIR,
     drafts_dir: str = _DRAFTS_DIR,
     limit: int = 20,
+    *,
+    db_path: str | None = None,
 ) -> list[SearchResult]:
     """Search documents, provisions, and requirements by query string.
 
@@ -38,10 +62,20 @@ def search(
         candidates_dir: Root candidates directory.
         drafts_dir: Draft documents directory.
         limit: Maximum number of results.
+        db_path: Optional SQLite database path. When provided, uses
+            search_sqlite as backend instead of in-memory search.
 
     Returns:
         List of SearchResult sorted by record_type then record_id.
     """
+    if db_path is not None:
+        if not Path(db_path).exists():
+            return []
+        from .sqlite_search import search_sqlite
+
+        rows = search_sqlite(db_path, query, mode="all", limit=limit)
+        return [_convert_sqlite_row(r) for r in rows]
+
     result = collect_records(
         candidates_dir=candidates_dir,
         drafts_dir=drafts_dir,
